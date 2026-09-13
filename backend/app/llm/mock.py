@@ -55,8 +55,29 @@ def default_extract_claims(request: LLMRequest) -> dict:
     return {"claims": claims}
 
 
+_SCORES = re.compile(r"support_score=([\d.]+)\s+refute_score=([\d.]+)")
+
+
+def default_resolve_conflict(request: LLMRequest) -> dict:
+    """Side with the heuristic scores echoed in the prompt; inconclusive when close."""
+    match = _SCORES.search(request.prompt)
+    support, refute = (float(match.group(1)), float(match.group(2))) if match else (0.0, 0.0)
+    total = support + refute
+    margin = (support - refute) / total if total else 0.0
+    if abs(margin) < 0.1:
+        winner, confidence = "inconclusive", 0.4
+    else:
+        winner, confidence = ("supports" if margin > 0 else "refutes"), round(0.5 + abs(margin), 2)
+    return {
+        "winner": winner,
+        "reasoning": f"Mock arbitration from heuristic scores (margin {margin:+.2f}).",
+        "confidence": min(confidence, 1.0),
+    }
+
+
 DEFAULT_HANDLERS: dict[str, Handler] = {
     "extract_claims": default_extract_claims,
+    "resolve_conflict": default_resolve_conflict,
 }
 
 

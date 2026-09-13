@@ -13,18 +13,23 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 2 (Sources and model layer) complete.** Docker Compose
-> environment, PostgreSQL schema with forward-only migrations, FastAPI service
-> with health, readiness, system status and Prometheus metrics, request ids
-> and JSON logs, a React shell with an Overview page, CI, and now the evidence
-> building blocks: typed **arXiv and Wikipedia clients** with retries, a
-> per-host throttle and a database-backed search cache; a **provider-agnostic
-> model layer** (Gemini free tier or a deterministic mock) with structured
-> output, tier fallback, a daily request budget and cost accounting; and
-> **claim extraction with stance** and deterministic ids. The pipeline that
-> assembles them is Phase 4. Each section below states what is
-> **implemented** versus **planned**; the phase plan is in
-> [`docs/specification.md`](docs/specification.md).
+> **Status: Phase 3 (Citation graph and conflict resolution) complete.**
+> Docker Compose environment, PostgreSQL schema with forward-only migrations,
+> FastAPI service with health, readiness, system status and Prometheus
+> metrics, request ids and JSON logs, a React shell with an Overview page,
+> CI; the evidence building blocks: typed **arXiv and Wikipedia clients** with
+> retries, a per-host throttle and a database-backed search cache, a
+> **provider-agnostic model layer** (Gemini free tier or a deterministic
+> mock) with structured output, tier fallback, a daily request budget and
+> cost accounting, **claim extraction with stance** and deterministic ids;
+> and now the **citation graph** in which every claim's stance becomes a
+> `supports` or `refutes` edge, so **conflicts are detected by construction**,
+> plus a **conflict resolver** that scores both sides deterministically, asks
+> the model to arbitrate only when the margin is close, records its
+> reasoning, keeps the losing side as a minority report and adds
+> `supersedes` edges. The pipeline that assembles these per run is Phase 4.
+> Each section below states what is **implemented** versus **planned**; the
+> phase plan is in [`docs/specification.md`](docs/specification.md).
 
 ---
 
@@ -57,17 +62,20 @@ receive:
 - a citation graph you can inspect;
 - or an explicit *inconclusive* verdict with the reasons.
 
-**Implemented today (Phases 1-2):** the environment, database, API skeleton,
-UI shell, source retrieval with caching, the model layer, and claim
-extraction with stance (see [`docs/evidence.md`](docs/evidence.md)). You can
-already search sources through the API:
+**Implemented today (Phases 1-3):** the environment, database, API skeleton,
+UI shell, source retrieval with caching, the model layer, claim extraction
+with stance ([`docs/evidence.md`](docs/evidence.md)), the citation graph and
+conflict resolution ([`docs/graph.md`](docs/graph.md)). You can already
+search sources through the API and run the whole evidence chain on one
+question from the command line:
 
 ```bash
 curl -s "localhost:8100/api/v1/sources/search?q=Do%20LLMs%20understand%20language&limit=3" | python3 -m json.tool
+docker compose run --rm backend python -m app.evidence.cli "Do LLMs understand language?" --graph
 ```
 
-**Planned:** the citation graph, conflict resolution, the full pipeline and
-the remaining UI pages, phase by phase (see the roadmap).
+**Planned:** the LangGraph pipeline with persistence and API (Phase 4), the
+remaining UI pages, reliability controls and the benchmark (see the roadmap).
 
 ## 2. Architecture
 
@@ -88,6 +96,7 @@ Design records: [`docs/decisions/`](docs/decisions/).
 | Database | PostgreSQL, SQLAlchemy, psycopg | 16, 2.0, 3.2 |
 | Model | Google Gemini via `google-genai`, or a deterministic mock | 2.23, free tier |
 | Sources | arXiv API, Wikipedia API via httpx + defusedxml | 0.28, 0.7 |
+| Graph | NetworkX | 3.6 |
 | Orchestration | LangGraph (Phase 4) | pinned at install |
 | Frontend | React, Vite, TypeScript, react-router | 18, 8, 5.6, 7 |
 | Metrics | prometheus-client | 0.21 |
@@ -181,7 +190,7 @@ ArguMind/
 |-------|-------|--------|
 | 1 | Foundation: Compose, migrations, API skeleton, observability basics, UI shell, CI | **Complete** |
 | 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | **Complete** |
-| 3 | Citation graph with real `refutes` edges, conflict detection and resolution | Planned |
+| 3 | Citation graph with real `refutes` edges, conflict detection and resolution | **Complete** |
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Planned |
 | 5 | Ask, Evidence, Graph and Runs pages | Planned |
 | 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | Planned |
@@ -190,8 +199,15 @@ ArguMind/
 
 ## 9. Limitations
 
-- Nothing answers questions yet: sources and claims exist, the pipeline that
-  reasons over them is Phase 4.
+- Nothing answers questions through the API yet: sources, claims, the graph
+  and conflict resolution exist and can be exercised from the CLI; the
+  pipeline that runs them per request with persistence is Phase 4.
+- Conflicts are detected per sub-question, the proposition every claim's
+  stance was judged against. Finer, pairwise conflicts within a topic need
+  the semantic clustering of Phase 4.
+- The resolver's authority priors, recency curve and evidence-type weights
+  are explicit constants chosen by judgement, not fitted; the Phase 7
+  benchmark is where they get challenged.
 - The arXiv API allows roughly one request every three seconds per client
   and answers bursts with HTTP 429 for a while. The client throttles itself
   and backs off, and a throttled arXiv is reported as a per-source error

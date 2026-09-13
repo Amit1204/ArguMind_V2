@@ -33,7 +33,8 @@ flowchart TD
 | Model layer: `LLMProvider` with Gemini and deterministic mock, JSON-schema output, tier fallback, daily request budget, price table, usage ledger | **Implemented** (Phase 2) | `backend/app/llm/`, ADR-004 |
 | Claim extraction with stance, deterministic ids, dedup and caps; manual CLI check | **Implemented** (Phase 2) | `backend/app/evidence/`, ADR-005 |
 | Retry policy with jittered backoff (shared by sources and model layer) | **Implemented** (Phase 2) | `backend/app/reliability/retry.py` |
-| Citation graph with real `refutes` edges, conflict detection and resolution | Designed (Phase 3) | `backend/app/graph/`, `backend/app/reasoning/` |
+| Citation graph (questions, sources, claims; `supports`/`refutes` stance edges, `extends`, `supersedes`), conflict detection by construction, validated serialisation | **Implemented** (Phase 3) | `backend/app/graph/`, `docs/graph.md` |
+| Conflict resolver: authority × recency × evidence-type × confidence scoring, model arbitration for close margins with recorded reasoning, minority reports, `supersedes` edges | **Implemented** (Phase 3) | `backend/app/reasoning/`, ADR-006 |
 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Designed (Phase 4) | `backend/app/pipeline/` |
 | Ask, Evidence, Graph and Runs pages | Designed (Phase 5) | `frontend/src/pages/` |
 | Pipeline metrics, retries with jitter, circuit breakers, run deadline, rate limit | Designed (Phase 6) | `backend/app/reliability/` |
@@ -92,7 +93,7 @@ Ports differ from the copilot's (3000/8000/5432) so both stacks can run side by 
 ```
 ArguMind/
 ├── backend/            FastAPI service (app/, tests/, Dockerfile)
-│   └── app/            api/, llm/, sources/, evidence/, reliability/, observability/
+│   └── app/            api/, llm/, sources/, evidence/, graph/, reasoning/, reliability/, observability/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
 ├── docs/               specification, architecture, evidence, ADRs
