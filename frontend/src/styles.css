@@ -1,0 +1,51 @@
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --ink: #1d2733;
+  --muted: #5f6b7a;
+  --line: #e3e8ee;
+  --brand: #1f3a5f;
+  --ok: #2f9e6f;
+  --warn: #d68a1d;
+  --bad: #c9403d;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+h2 { font-size: 1.05rem; margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+p { line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+td { padding: 0.4rem 0.5rem 0.4rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td:first-child { color: var(--muted); width: 32%; }
+
+.shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; flex: 0 0 220px; background: var(--brand); color: #fff;
+  display: flex; flex-direction: column; padding: 1.25rem 1rem;
+}
+.brand { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; }
+.brand-name { font-weight: 650; letter-spacing: 0.01em; }
+.brand-sub { font-size: 0.75rem; opacity: 0.75; }
+nav { display: flex; flex-direction: column; gap: 0.25rem; }
+.nav { color: #dfe7f1; text-decoration: none; padding: 0.5rem 0.65rem; border-radius: 6px; }
+.nav:hover { background: rgba(255, 255, 255, 0.08); }
+.nav.active { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 600; }
+.sidebar-foot { margin-top: auto; font-size: 0.75rem; opacity: 0.7; }
+
+.content { flex: 1; padding: 2rem 2.5rem; max-width: 1100px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; }
+.card.error { border-color: var(--bad); color: var(--bad); }
+.muted { color: var(--muted); }
+
+.badge { font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; text-transform: uppercase; }
+.badge.ok { background: #e3f5ec; color: var(--ok); }
+.badge.bad { background: #fbe6e5; color: var(--bad); }
+.dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.45rem; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }

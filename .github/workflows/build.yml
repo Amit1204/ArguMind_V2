@@ -1,0 +1,25 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Validates that every image builds. Images are not pushed anywhere: the
+# deployment target is Docker Compose on a host of your choice.
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend, database]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: false
+          tags: argumind-${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

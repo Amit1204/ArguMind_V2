@@ -1,0 +1,90 @@
+name: argumind
+
+# Canonical local environment. Start everything with:
+#     docker compose up --build
+#
+# Startup order (enforced with health checks and completion conditions):
+#     postgres  ->  db-migrate  ->  backend  ->  frontend
+#
+# Every ${VAR:-default} has a working local default, so the stack boots
+# even before `.env` exists. Copy `.env.example` to `.env` to override.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: argumind-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-argumind}
+      POSTGRES_USER: ${POSTGRES_USER:-argumind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-argumind_dev_password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback only: reachable from the host for inspection, never from the network.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # One-shot job: applies database/migrations/*.sql in order, once each.
+  db-migrate:
+    build:
+      context: ./database
+    container_name: argumind-db-migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-argumind}:${POSTGRES_PASSWORD:-argumind_dev_password}@postgres:5432/${POSTGRES_DB:-argumind}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: argumind-backend
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-argumind}:${POSTGRES_PASSWORD:-argumind_dev_password}@postgres:5432/${POSTGRES_DB:-argumind}
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3100}
+      # LLM (set LLM_API_KEY in .env; LLM_PROVIDER=mock runs without a key)
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL_FAST: ${LLM_MODEL_FAST:-gemini-3.5-flash-lite}
+      LLM_MODEL_STANDARD: ${LLM_MODEL_STANDARD:-gemini-3-flash-preview}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+      LLM_DAILY_REQUEST_LIMIT: ${LLM_DAILY_REQUEST_LIMIT:-1000}
+      RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-180}
+    ports:
+      - "${BACKEND_PORT:-8100}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: argumind-frontend
+    ports:
+      - "${FRONTEND_PORT:-3100}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:

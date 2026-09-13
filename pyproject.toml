@@ -1,0 +1,41 @@
+# Shared tooling configuration for all Python code in the repository.
+# Runtime dependencies are pinned per service (backend/requirements.txt,
+# database/requirements.txt) so each Docker image installs only what it needs.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["frontend", "node_modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # bandit security checks
+    "T20", # no stray print statements
+]
+ignore = [
+    "S101", # assert is fine in tests
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "migrate"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency injection idiom is `param: T = Depends(...)`.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106"]
+# The migration job is a CLI; its progress output is intentional.
+"database/migrate.py" = ["T201"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "database/tests"]
+pythonpath = ["backend", "database"]
+addopts = "-ra"
