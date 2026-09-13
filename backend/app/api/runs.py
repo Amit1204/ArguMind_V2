@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from app.observability import metrics
+from app.observability.ops import OPS
 from app.pipeline.detail import build_graph_response, build_run_detail, run_summary
+from app.reliability.ratelimit import RateLimiter
 from app.schemas.runs import GraphResponse, RunCreate, RunDetail, RunList
 from app.services.run_executor import RunExecutor
 
@@ -40,6 +44,21 @@ def get_run_executor(request: Request) -> RunExecutor:
     return executor
 
 
+def get_rate_limiter(request: Request) -> RateLimiter:
+    limiter = getattr(request.app.state, "run_rate_limiter", None)
+    if limiter is None:
+        limiter = RateLimiter(request.app.state.settings.rate_limit_runs_per_minute)
+        request.app.state.run_rate_limiter = limiter
+    return limiter
+
+
+def _client_key(request: Request, body: RunCreate) -> str:
+    if body.client_id:
+        return f"client:{body.client_id}"
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"
+
+
 @router.post("", response_model=RunDetail, status_code=status.HTTP_202_ACCEPTED)
 def create_run(
     body: RunCreate,
@@ -47,11 +66,28 @@ def create_run(
     response: Response,
     wait: bool = Query(default=False, description="Block until the run finishes (bounded)"),
     executor: RunExecutor = Depends(get_run_executor),
+    limiter: RateLimiter = Depends(get_rate_limiter),
 ) -> RunDetail:
+    settings = request.app.state.settings
+    decision = limiter.check(_client_key(request, body))
+    if not decision.allowed:
+        metrics.RATE_LIMITED.inc()
+        OPS.rate_limit_hit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"rate limit: at most {limiter.limit} runs per minute per client",
+            headers={"Retry-After": str(max(1, int(decision.retry_after_seconds)))},
+        )
+    if executor.active >= settings.run_queue_max:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="too many runs in progress; try again shortly",
+            headers={"Retry-After": "30"},
+        )
     request_id = getattr(request.state, "request_id", None)
     run_id = executor.submit(body.question, request_id, body.client_id)
     if wait:
-        executor.wait(run_id, timeout=request.app.state.settings.run_timeout_seconds + 30)
+        executor.wait(run_id, timeout=settings.run_timeout_seconds + 30)
     detail = build_run_detail(executor.store, run_id)
     if detail is None:  # pragma: no cover - the row was just created
         raise HTTPException(status_code=500, detail="run was not persisted")
@@ -92,8 +128,6 @@ def get_run_graph(run_id: str, executor: RunExecutor = Depends(get_run_executor)
 
 
 def _validate_id(run_id: str) -> str:
-    import uuid
-
     try:
         return str(uuid.UUID(run_id))
     except ValueError as exc:

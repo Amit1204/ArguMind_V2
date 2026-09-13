@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     # Concurrent pipeline runs per backend process.
     run_workers: int = Field(default=2, ge=1, le=8)
 
+    # --- Reliability -------------------------------------------------------
+    # Runs a single client (client_id or IP) may start per minute.
+    rate_limit_runs_per_minute: int = Field(default=5, ge=1)
+    # Queued-or-running runs accepted before POST /runs answers 503; per process.
+    run_queue_max: int = Field(default=6, ge=1)
+    # Consecutive failures that open a source or model circuit, and how long it stays open.
+    circuit_failure_threshold: int = Field(default=3, ge=1)
+    circuit_recovery_seconds: int = Field(default=120, ge=5)
+
     @field_validator("log_level")
     @classmethod
     def _upper_level(cls, value: str) -> str:

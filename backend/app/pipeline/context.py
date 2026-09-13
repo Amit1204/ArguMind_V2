@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from app.config import Settings
 from app.evidence.extractor import ClaimExtractor
 from app.llm.base import LLMProvider, UsageLedger
+from app.observability import metrics
+from app.observability.ops import OPS
 from app.pipeline.schemas import StageRecord, StageStatus
 from app.pipeline.store import RunStore
 from app.reasoning.conflicts import ConflictResolver
@@ -103,6 +105,8 @@ class PipelineContext:
                 error=run.error,
             )
             self.stages.append(record)
+            metrics.observe_stage(name, record.status, record.duration_ms / 1000)
+            OPS.stage(name, record.status, record.duration_ms)
             try:
                 self.store.save_stage(self.run_id, record)
             except Exception:  # persistence must never take the pipeline down

@@ -1,0 +1,72 @@
+{
+  "uid": "argumind-overview",
+  "title": "ArguMind",
+  "tags": ["argumind"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Runs finished (1h)",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(argumind_runs_total[1h]))", "legendFormat": "runs"}]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Runs active",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "argumind_runs_active", "legendFormat": "active"}]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Run p95 (s, 1h)",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(argumind_run_duration_seconds_bucket[1h])) by (le))", "legendFormat": "p95"}]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Rate limited (1h)",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "increase(argumind_rate_limited_total[1h])", "legendFormat": "429s"}]
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Runs by status (per 5m)",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(argumind_runs_total[5m])) by (status)", "legendFormat": "{{status}}"}]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Stage p50 duration (s)",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.5, sum(rate(argumind_stage_duration_seconds_bucket[15m])) by (le, stage))", "legendFormat": "{{stage}}"}]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Model calls by outcome (per 5m)",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(argumind_llm_calls_total[5m])) by (outcome)", "legendFormat": "{{outcome}}"}]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Source calls by kind and outcome (per 5m)",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(argumind_source_calls_total[5m])) by (kind, outcome)", "legendFormat": "{{kind}} {{outcome}}"}]
+    },
+    {
+      "id": 9, "type": "state-timeline", "title": "Circuit breakers (0 closed, 1 half-open, 2 open)",
+      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "argumind_circuit_state", "legendFormat": "{{name}}"}]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Tokens per 5m by direction",
+      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(increase(argumind_llm_tokens_total[5m])) by (direction)", "legendFormat": "{{direction}}"}]
+    }
+  ]
+}

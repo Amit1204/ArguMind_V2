@@ -8,6 +8,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app.reliability.circuit import REGISTRY as BREAKERS
 from app.reliability.retry import RetryPolicy
 from app.sources.arxiv import ArxivClient
 from app.sources.cache import DbSourceCache, MemorySourceCache, SourceCache
@@ -31,6 +32,14 @@ def build_source_service(
     )
     wikipedia_fetcher = HttpFetcher(timeout_seconds=settings.source_timeout_seconds, policy=policy)
     cache: SourceCache = DbSourceCache(session_factory) if session_factory else MemorySourceCache()
+    breakers = {
+        kind: BREAKERS.get(
+            f"source:{kind.value}",
+            failure_threshold=settings.circuit_failure_threshold,
+            recovery_seconds=settings.circuit_recovery_seconds,
+        )
+        for kind in (SourceKind.ARXIV, SourceKind.WIKIPEDIA)
+    }
     return SourceSearchService(
         clients=[ArxivClient(arxiv_fetcher), WikipediaClient(wikipedia_fetcher)],
         cache=cache,
@@ -39,4 +48,5 @@ def build_source_service(
             SourceKind.ARXIV: settings.arxiv_max_results,
             SourceKind.WIKIPEDIA: settings.wikipedia_max_results,
         },
+        breakers=breakers,
     )

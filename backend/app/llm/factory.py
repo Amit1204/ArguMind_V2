@@ -1,12 +1,14 @@
-"""Build the configured provider, wrapped with the local daily budget."""
+"""Build the configured provider: budget guard, then metrics and circuit breaker."""
 
 from __future__ import annotations
 
 from app.config import Settings
 from app.llm.base import LLMConfigurationError, LLMProvider, LLMRequest, LLMResponse, ModelTier
 from app.llm.budget import DailyRequestBudget
+from app.llm.instrumented import InstrumentedProvider
 from app.llm.mock import MockProvider
 from app.llm.pricing import PriceTable
+from app.reliability.circuit import REGISTRY as BREAKERS
 
 
 class BudgetedProvider(LLMProvider):
@@ -25,26 +27,34 @@ class BudgetedProvider(LLMProvider):
         return self.inner.complete(request)
 
 
-def build_provider(settings: Settings) -> LLMProvider:
+def build_provider(settings: Settings, instrument: bool = True) -> LLMProvider:
     budget = DailyRequestBudget(settings.llm_daily_request_limit)
     if settings.llm_provider == "mock":
-        return BudgetedProvider(MockProvider(), budget)
-    if settings.llm_provider == "gemini":
+        inner: LLMProvider = MockProvider()
+    elif settings.llm_provider == "gemini":
         # Imported lazily so the mock path never needs the SDK's network client.
         from app.llm.gemini import GeminiProvider
 
-        return BudgetedProvider(
-            GeminiProvider(
-                api_key=settings.llm_api_key.get_secret_value(),
-                models={
-                    ModelTier.FAST: settings.llm_model_fast,
-                    ModelTier.STANDARD: settings.llm_model_standard,
-                },
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-                price_table=PriceTable.from_json(settings.llm_price_table_json),
-                thinking_level=settings.llm_thinking_level,
-            ),
-            budget,
+        inner = GeminiProvider(
+            api_key=settings.llm_api_key.get_secret_value(),
+            models={
+                ModelTier.FAST: settings.llm_model_fast,
+                ModelTier.STANDARD: settings.llm_model_standard,
+            },
+            timeout_seconds=settings.llm_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+            price_table=PriceTable.from_json(settings.llm_price_table_json),
+            thinking_level=settings.llm_thinking_level,
         )
-    raise LLMConfigurationError(f"unknown LLM provider: {settings.llm_provider}")
+    else:
+        raise LLMConfigurationError(f"unknown LLM provider: {settings.llm_provider}")
+
+    budgeted = BudgetedProvider(inner, budget)
+    if not instrument:
+        return budgeted
+    breaker = BREAKERS.get(
+        f"llm:{settings.llm_provider}",
+        failure_threshold=settings.circuit_failure_threshold,
+        recovery_seconds=settings.circuit_recovery_seconds,
+    )
+    return InstrumentedProvider(budgeted, breaker)

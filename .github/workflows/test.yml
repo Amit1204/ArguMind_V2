@@ -72,7 +72,11 @@ jobs:
       - name: Observability smoke test
         run: |
           curl -fsS http://localhost:8100/metrics | grep -q argumind_http_requests_total
+          curl -fsS http://localhost:8100/metrics | grep -q argumind_runs_active
+          curl -fsS http://localhost:8100/api/v1/system/operations | grep -q '"circuits"'
           test -n "$(curl -fsS -D - -o /dev/null http://localhost:8100/health | grep -i x-request-id)"
+      - name: Error envelope carries the request id
+        run: curl -s http://localhost:8100/api/v1/runs/not-a-uuid | grep -q '"request_id"'
       - name: Source search validates input without touching the network
         run: test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8100/api/v1/sources/search?q=ab')" = "422"
       - name: Frontend serves the app and proxies the API

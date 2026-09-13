@@ -10,6 +10,7 @@ import {
   type SystemStatus,
 } from "../api/client";
 import { StatusBadge, formatMs, formatPct } from "../components/Badges";
+import OperationsCard from "../components/OperationsCard";
 
 export default function Overview() {
   const [ready, setReady] = useState<ReadinessResponse | null>(null);
@@ -125,7 +126,11 @@ export default function Overview() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="stack">
+        <OperationsCard />
+      </div>
+
+      <div className="card" style={{ marginTop: "1rem" }}>
         <h2>
           Recent runs{" "}
           <Link to="/runs" className="muted small">

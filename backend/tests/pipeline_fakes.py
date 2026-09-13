@@ -105,4 +105,9 @@ def make_runner(
     sources = sources or FakeSourceService()
     store = MemoryRunStore()
     kwargs = {"clock": clock} if clock else {}
-    return PipelineRunner(settings, provider, sources, store, **kwargs), store, sources, provider
+    # The runner sees the instrumented wrapper (metrics as in production); tests keep
+    # the inner mock so they can inspect its recorded calls.
+    from app.llm.instrumented import InstrumentedProvider
+
+    runner = PipelineRunner(settings, InstrumentedProvider(provider), sources, store, **kwargs)
+    return runner, store, sources, provider

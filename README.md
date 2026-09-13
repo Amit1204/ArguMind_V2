@@ -13,8 +13,14 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 5 (Frontend) complete.** The system answers questions end
-> to end, in the browser and through the API. The **web UI** has an Ask page
+> **Status: Phase 6 (Observability and reliability) complete.** The system
+> answers questions end to end, in the browser and through the API, and it is
+> now **observable and self-protecting**: metrics for runs, stages, model
+> calls, source calls and circuit breakers on `/metrics`, an operations
+> summary on the Overview page, a request id in every log line and error
+> response, an optional Prometheus and Grafana overlay, **circuit breakers**
+> per source and for the model, a **per-client rate limit** and a queue cap
+> with `Retry-After`, and documented **failure drills**. The **web UI** has an Ask page
 > that shows each pipeline stage as it completes, a run view with the cited
 > answer, the evidence (sources, claims by stance, conflicts with minority
 > views, topic clusters), an interactive **citation graph** and the stage
@@ -84,8 +90,15 @@ with its timing and model usage. `GET /api/v1/runs/{id}/graph` returns the
 citation graph. Details: [`docs/pipeline.md`](docs/pipeline.md),
 [`docs/evidence.md`](docs/evidence.md), [`docs/graph.md`](docs/graph.md).
 
-**Planned:** reliability controls and metrics per stage (Phase 6), the
-benchmark (Phase 7), final review and publication (Phase 8).
+Operations: [`docs/observability.md`](docs/observability.md) and
+[`docs/reliability.md`](docs/reliability.md). Optional dashboards:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# Grafana http://localhost:3101 (admin/admin), Prometheus http://localhost:9091
+```
+
+**Planned:** the benchmark (Phase 7), final review and publication (Phase 8).
 
 ## 2. Architecture
 
@@ -211,7 +224,7 @@ ArguMind/
 | 3 | Citation graph with real `refutes` edges, conflict detection and resolution | **Complete** |
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | **Complete** |
 | 5 | Ask, Evidence, Graph and Runs pages | **Complete** |
-| 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | Planned |
+| 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | **Complete** |
 | 7 | Benchmark with deterministic graders and committed reports | Planned |
 | 8 | Security review, final docs, demo script, publication | Planned |
 
@@ -223,6 +236,10 @@ ArguMind/
   Ask page shows each stage as it completes.
 - The frontend has no unit tests; it is type-checked in CI and verified by
   walkthrough. Progress granularity is one pipeline stage.
+- Circuit breaker, rate limit and operations state live in the single
+  backend process and reset on restart; several replicas would need shared
+  state (Redis), which is documented, not built. There is no distributed
+  tracing: request ids and persisted stages cover the one-process design.
 - Conflicts are detected per sub-question, the proposition every claim's
   stance was judged against; topic clusters flag pairwise disagreement within
   a topic but the resolver does not yet act on cluster-level conflicts.

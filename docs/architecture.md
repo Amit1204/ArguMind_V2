@@ -38,7 +38,8 @@ flowchart TD
 | Conflict resolver: authority × recency × evidence-type × confidence scoring, model arbitration for close margins with recorded reasoning, minority reports, `supersedes` edges | **Implemented** (Phase 3) | `backend/app/reasoning/`, ADR-006 |
 | LangGraph pipeline: plan → gather → extract → graph → resolve → cluster (`extends` edges) → consensus → rule-based critic with one broadened retry → cited answer → citation verification; time budget; deterministic fallbacks; `inconclusive` outcome | **Implemented** (Phase 4) | `backend/app/pipeline/`, `docs/pipeline.md`, ADR-007 |
 | Run persistence (runs, stages as they complete, sources, claims, edges) with memory and PostgreSQL stores; runs API (`POST /runs`, list, detail, graph) on a bounded worker pool | **Implemented** (Phase 4) | `backend/app/pipeline/store.py`, `backend/app/api/runs.py` |
-| Pipeline metrics, retries with jitter, circuit breakers, run deadline, rate limit | Designed (Phase 6) | `backend/app/reliability/` |
+| Observability: run, stage, model, source and breaker metrics on `/metrics`; operations summary endpoint and Overview card; request id in every error; optional Prometheus + Grafana overlay with a provisioned dashboard | **Implemented** (Phase 6) | `backend/app/observability/`, `docker-compose.observability.yml`, `docs/observability.md` |
+| Reliability: circuit breakers per source and for the model, per-client rate limit and queue cap with `Retry-After`, plus the earlier retries, throttle, budget, time budget and deterministic fallbacks; documented failure drills | **Implemented** (Phase 6) | `backend/app/reliability/`, `docs/reliability.md`, ADR-009 |
 | Benchmark with deterministic graders and committed reports | Designed (Phase 7) | `backend/app/evaluation/`, `evaluation/reports/` |
 | Security review, final docs, publication | Designed (Phase 8) | — |
 
@@ -98,7 +99,10 @@ ArguMind/
 │                       reliability/, observability/, services/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
-├── docs/               specification, architecture, evidence, graph, pipeline, frontend, ADRs
+├── docs/               specification, architecture, evidence, graph, pipeline, frontend,
+│                       observability, reliability, ADRs
+├── observability/      Prometheus config, Grafana provisioning and dashboard
+├── docker-compose.observability.yml   optional Prometheus + Grafana overlay
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment
 ├── Makefile            convenience targets (all run inside Docker)

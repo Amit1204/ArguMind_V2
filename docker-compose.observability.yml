@@ -1,0 +1,36 @@
+# Optional overlay: Prometheus scraping the backend, Grafana with a provisioned
+# datasource and dashboard. Start with:
+#     docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# Grafana: http://localhost:3101 (admin / admin)   Prometheus: http://localhost:9091
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: argumind-prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9091}:9090"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: argumind-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3101}:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped

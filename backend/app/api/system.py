@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -37,3 +38,31 @@ def system_status(
     payload: SystemStatusResponse = Depends(provide_system_status),
 ) -> SystemStatusResponse:
     return payload
+
+
+@router.get("/operations")
+def system_operations(request: Request) -> dict[str, Any]:
+    """In-process operational summary since start (the Overview page's card).
+
+    Prometheus-format metrics for scraping live at /metrics; this is the
+    human-readable roll-up: runs by status, p50/p95 latencies, stage outcomes,
+    model calls and tokens, source calls, circuit states, rate limiting.
+    """
+    from app.observability.ops import OPS
+    from app.reliability.circuit import REGISTRY as BREAKERS
+
+    settings: Settings = request.app.state.settings
+    data = OPS.snapshot()
+    executor = getattr(request.app.state, "run_executor", None)
+    data["runs"]["active"] = executor.active if executor is not None else data["runs"]["active"]
+    data["circuits"] = BREAKERS.states()
+    data["limits"] = {
+        "runs_per_minute_per_client": settings.rate_limit_runs_per_minute,
+        "run_queue_max": settings.run_queue_max,
+        "run_workers": settings.run_workers,
+        "run_timeout_seconds": settings.run_timeout_seconds,
+        "llm_daily_request_limit": settings.llm_daily_request_limit,
+        "circuit_failure_threshold": settings.circuit_failure_threshold,
+        "circuit_recovery_seconds": settings.circuit_recovery_seconds,
+    }
+    return data

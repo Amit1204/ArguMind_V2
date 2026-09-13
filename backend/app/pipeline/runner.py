@@ -8,6 +8,8 @@ from collections.abc import Callable
 
 from app.config import Settings
 from app.llm.base import LLMProvider
+from app.observability import metrics
+from app.observability.ops import OPS
 from app.pipeline.context import PipelineContext
 from app.pipeline.graph import build_pipeline, initial_state
 from app.pipeline.schemas import RunUsage
@@ -35,6 +37,8 @@ class PipelineRunner:
     def run(self, run_id: str, question: str, request_id: str | None = None) -> str:
         """Run the pipeline for an existing (queued) run; returns the final status."""
         self.store.mark_running(run_id)
+        metrics.RUNS_ACTIVE.inc()
+        OPS.run_started()
         ctx = PipelineContext(
             settings=self.settings,
             provider=self.provider,
@@ -46,47 +50,57 @@ class PipelineRunner:
         )
         started = self.clock()
         try:
-            final = build_pipeline(ctx).invoke(
-                initial_state(question), config={"recursion_limit": 50}
-            )
-        except Exception as exc:
+            try:
+                final = build_pipeline(ctx).invoke(
+                    initial_state(question), config={"recursion_limit": 50}
+                )
+            except Exception as exc:
+                latency_ms = int((self.clock() - started) * 1000)
+                log.exception("run %s failed", run_id)
+                self.store.finish_run(
+                    run_id,
+                    "failed",
+                    answer=None,
+                    confidence=None,
+                    outcome_reason="pipeline error",
+                    iteration_count=0,
+                    usage=RunUsage(**ctx.ledger.summary()),
+                    latency_ms=latency_ms,
+                    error=f"{type(exc).__name__}: {exc}"[:2000],
+                )
+                self._finish_metrics("failed", latency_ms)
+                return "failed"
+
             latency_ms = int((self.clock() - started) * 1000)
-            log.exception("run %s failed", run_id)
+            status = final.get("status") or "failed"
+            answer = final.get("answer") or {}
             self.store.finish_run(
                 run_id,
-                "failed",
-                answer=None,
-                confidence=None,
-                outcome_reason="pipeline error",
-                iteration_count=0,
+                status,
+                answer=answer.get("answer"),
+                confidence=answer.get("confidence"),
+                outcome_reason=final.get("outcome_reason"),
+                iteration_count=int(final.get("iteration", 0)),
                 usage=RunUsage(**ctx.ledger.summary()),
                 latency_ms=latency_ms,
-                error=f"{type(exc).__name__}: {exc}"[:2000],
             )
-            return "failed"
+            self._finish_metrics(status, latency_ms)
+            log.info(
+                "run %s %s in %dms (%d llm calls)",
+                run_id,
+                status,
+                latency_ms,
+                ctx.ledger.calls,
+                extra={"run_id": run_id, "status": status},
+            )
+            return status
+        finally:
+            metrics.RUNS_ACTIVE.dec()
 
-        latency_ms = int((self.clock() - started) * 1000)
-        status = final.get("status") or "failed"
-        answer = final.get("answer") or {}
-        self.store.finish_run(
-            run_id,
-            status,
-            answer=answer.get("answer"),
-            confidence=answer.get("confidence"),
-            outcome_reason=final.get("outcome_reason"),
-            iteration_count=int(final.get("iteration", 0)),
-            usage=RunUsage(**ctx.ledger.summary()),
-            latency_ms=latency_ms,
-        )
-        log.info(
-            "run %s %s in %dms (%d llm calls)",
-            run_id,
-            status,
-            latency_ms,
-            ctx.ledger.calls,
-            extra={"run_id": run_id, "status": status},
-        )
-        return status
+    @staticmethod
+    def _finish_metrics(status: str, latency_ms: int) -> None:
+        metrics.observe_run(status, latency_ms / 1000)
+        OPS.run_finished(status, latency_ms)
 
     def execute(
         self, question: str, request_id: str | None = None, client_id: str | None = None

@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -61,6 +61,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     # Added last so it is outermost: every response, including errors, carries the id.
     app.add_middleware(RequestContextMiddleware)
+
+    @app.exception_handler(HTTPException)
+    async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+        """Every error response carries the request id so callers can quote it."""
+        request_id = getattr(request.state, "request_id", None)
+        headers = dict(exc.headers or {})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "request_id": request_id},
+            headers=headers or None,
+        )
 
     @app.exception_handler(Exception)
     async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
