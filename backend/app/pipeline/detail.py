@@ -56,7 +56,12 @@ def build_run_detail(store: RunStore, run_id: str) -> RunDetail | None:
 
 
 def _consensus_view(detail: dict) -> dict:
-    return {k: v for k, v in detail.items() if k in {"strength", "confidence", "method"}}
+    """The full consensus (overall text, agreements, gaps, ...) plus how it was produced."""
+    consensus = dict(detail.get("consensus") or {})
+    consensus.setdefault("strength", detail.get("strength"))
+    consensus.setdefault("confidence", detail.get("confidence"))
+    consensus["method"] = detail.get("method")
+    return consensus
 
 
 def _without(d: dict, keys: set[str]) -> dict:

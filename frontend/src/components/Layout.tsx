@@ -29,7 +29,12 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-foot">Phase 1 · foundation</div>
+        <div className="sidebar-foot">
+          <a href="/docs" target="_blank" rel="noreferrer">
+            API docs
+          </a>
+          <div>Phase 5 · frontend</div>
+        </div>
       </aside>
       <main className="content">
         <Outlet />

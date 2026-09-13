@@ -13,8 +13,12 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 4 (Pipeline and persistence) complete.** The system now
-> answers questions end to end through the API. A **LangGraph pipeline**
+> **Status: Phase 5 (Frontend) complete.** The system answers questions end
+> to end, in the browser and through the API. The **web UI** has an Ask page
+> that shows each pipeline stage as it completes, a run view with the cited
+> answer, the evidence (sources, claims by stance, conflicts with minority
+> views, topic clusters), an interactive **citation graph** and the stage
+> timeline, plus a run history. Underneath, a **LangGraph pipeline**
 > plans sub-questions, gathers from **arXiv and Wikipedia** (typed clients,
 > retries, throttle, database-backed cache), extracts **claims with stance**
 > and deterministic ids through a **provider-agnostic model layer** (Gemini
@@ -62,8 +66,10 @@ receive:
 - a citation graph you can inspect;
 - or an explicit *inconclusive* verdict with the reasons.
 
-**Implemented today (Phases 1-4):** all of the above through the API. Ask a
-question and wait for the answer:
+**Implemented today (Phases 1-5):** all of the above, in the web UI at
+http://localhost:3100 (Ask, Runs, Overview; see
+[`docs/frontend.md`](docs/frontend.md)) and through the API. From the
+command line, ask a question and wait for the answer:
 
 ```bash
 curl -s -X POST "localhost:8100/api/v1/runs?wait=true" -H 'Content-Type: application/json' \
@@ -78,8 +84,8 @@ with its timing and model usage. `GET /api/v1/runs/{id}/graph` returns the
 citation graph. Details: [`docs/pipeline.md`](docs/pipeline.md),
 [`docs/evidence.md`](docs/evidence.md), [`docs/graph.md`](docs/graph.md).
 
-**Planned:** the Ask, Evidence, Graph and Runs pages (Phase 5), reliability
-controls and metrics per stage (Phase 6), the benchmark (Phase 7).
+**Planned:** reliability controls and metrics per stage (Phase 6), the
+benchmark (Phase 7), final review and publication (Phase 8).
 
 ## 2. Architecture
 
@@ -121,7 +127,7 @@ Then:
 
 | URL | What |
 |-----|------|
-| http://localhost:3100 | Web UI (Overview page) |
+| http://localhost:3100 | Web UI (Overview, Ask, Runs) |
 | http://localhost:8100/docs | API documentation (Swagger UI) |
 | http://localhost:8100/ready | Readiness: database, schema, model provider |
 | http://localhost:8100/metrics | Prometheus metrics |
@@ -204,17 +210,19 @@ ArguMind/
 | 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | **Complete** |
 | 3 | Citation graph with real `refutes` edges, conflict detection and resolution | **Complete** |
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | **Complete** |
-| 5 | Ask, Evidence, Graph and Runs pages | Planned |
+| 5 | Ask, Evidence, Graph and Runs pages | **Complete** |
 | 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | Planned |
 | 7 | Benchmark with deterministic graders and committed reports | Planned |
 | 8 | Security review, final docs, demo script, publication | Planned |
 
 ## 9. Limitations
 
-- Runs are slow on the free tier: a question costs roughly 8-15 model calls
+- Runs are slow on the free tier: a question costs roughly 8-20 model calls
   (one per source for extraction plus plan, consensus, answer and any
   arbitration) and 30-120 seconds, mostly waiting on rate-limited APIs. The
-  UI to follow a run live is Phase 5.
+  Ask page shows each stage as it completes.
+- The frontend has no unit tests; it is type-checked in CI and verified by
+  walkthrough. Progress granularity is one pipeline stage.
 - Conflicts are detected per sub-question, the proposition every claim's
   stance was judged against; topic clusters flag pairwise disagreement within
   a topic but the resolver does not yet act on cluster-level conflicts.

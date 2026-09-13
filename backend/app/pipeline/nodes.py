@@ -328,7 +328,11 @@ def consensus_node(state: RunState, ctx: PipelineContext) -> dict:
                     "The consensus model call failed; a deterministic tally was used instead."
                 )
         stage.detail.update(
-            {"strength": consensus["strength"], "confidence": consensus["confidence"]}
+            {
+                "strength": consensus["strength"],
+                "confidence": consensus["confidence"],
+                "consensus": consensus,
+            }
         )
     return {"consensus": consensus, "caveats": caveats}
 

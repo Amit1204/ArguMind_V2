@@ -27,7 +27,8 @@ flowchart TD
 | PostgreSQL 16, forward-only idempotent migrations, core schema for runs and evidence | **Implemented** (Phase 1) | `database/` |
 | FastAPI service: `/health`, `/ready`, `/api/v1/system/status`, `/metrics` | **Implemented** (Phase 1) | `backend/app/` |
 | Request ids end to end, JSON logs, Prometheus HTTP metrics, JSON 500 envelope | **Implemented** (Phase 1) | `backend/app/observability/` |
-| React SPA shell with Overview page (readiness, system status) | **Implemented** (Phase 1) | `frontend/src/` |
+| React SPA shell with Overview page (readiness, system status, recent runs) | **Implemented** (Phases 1, 5) | `frontend/src/` |
+| Ask page with live stage progress (polling), run view with Answer (cited chips, caveats, consensus, critic), Evidence, Graph (SVG) and Stages tabs, Runs history | **Implemented** (Phase 5) | `frontend/src/pages/`, `frontend/src/components/`, `docs/frontend.md`, ADR-008 |
 | CI: lint, unit tests, frontend build, full-stack smoke test, image builds | **Implemented** (Phase 1) | `.github/workflows/` |
 | Source clients (arXiv, Wikipedia): typed results, retries, per-host throttle, database-backed search cache, per-source failure isolation, `/api/v1/sources/search` | **Implemented** (Phase 2) | `backend/app/sources/`, `docs/evidence.md` |
 | Model layer: `LLMProvider` with Gemini and deterministic mock, JSON-schema output, tier fallback, daily request budget, price table, usage ledger | **Implemented** (Phase 2) | `backend/app/llm/`, ADR-004 |
@@ -37,7 +38,6 @@ flowchart TD
 | Conflict resolver: authority × recency × evidence-type × confidence scoring, model arbitration for close margins with recorded reasoning, minority reports, `supersedes` edges | **Implemented** (Phase 3) | `backend/app/reasoning/`, ADR-006 |
 | LangGraph pipeline: plan → gather → extract → graph → resolve → cluster (`extends` edges) → consensus → rule-based critic with one broadened retry → cited answer → citation verification; time budget; deterministic fallbacks; `inconclusive` outcome | **Implemented** (Phase 4) | `backend/app/pipeline/`, `docs/pipeline.md`, ADR-007 |
 | Run persistence (runs, stages as they complete, sources, claims, edges) with memory and PostgreSQL stores; runs API (`POST /runs`, list, detail, graph) on a bounded worker pool | **Implemented** (Phase 4) | `backend/app/pipeline/store.py`, `backend/app/api/runs.py` |
-| Ask, Evidence, Graph and Runs pages | Designed (Phase 5) | `frontend/src/pages/` |
 | Pipeline metrics, retries with jitter, circuit breakers, run deadline, rate limit | Designed (Phase 6) | `backend/app/reliability/` |
 | Benchmark with deterministic graders and committed reports | Designed (Phase 7) | `backend/app/evaluation/`, `evaluation/reports/` |
 | Security review, final docs, publication | Designed (Phase 8) | — |
@@ -98,7 +98,7 @@ ArguMind/
 │                       reliability/, observability/, services/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
-├── docs/               specification, architecture, evidence, graph, pipeline, ADRs
+├── docs/               specification, architecture, evidence, graph, pipeline, frontend, ADRs
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment
 ├── Makefile            convenience targets (all run inside Docker)

@@ -31,6 +31,9 @@ class Source(BaseModel):
 
     @property
     def citation_label(self) -> str:
-        first = self.authors[0].split()[-1] if self.authors else self.kind.value
-        year = f" {self.published_year}" if self.published_year else ""
-        return f"{first}{year}"
+        """`Lovelace 2023` for authored papers; a shortened title for authorless pages."""
+        if self.authors:
+            first = self.authors[0].split()[-1]
+            return f"{first} {self.published_year}" if self.published_year else first
+        title = self.title if len(self.title) <= 28 else self.title[:27].rstrip() + "…"
+        return f"{title} ({self.kind.value})"
