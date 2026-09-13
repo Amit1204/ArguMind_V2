@@ -75,9 +75,80 @@ def default_resolve_conflict(request: LLMRequest) -> dict:
     }
 
 
+def default_plan(request: LLMRequest) -> dict:
+    question = _section(request.prompt, "QUESTION") or request.prompt.strip()
+    core = question.rstrip("?. ").strip()
+    core = re.sub(r"^(do|does|is|are|can|could|will|should)\s+", "", core, flags=re.I)
+    return {
+        "sub_questions": [question, f"What evidence contradicts the claim that {core}?"],
+        "domains": ["general"],
+        "complexity": "moderate",
+    }
+
+
+_TALLY = re.compile(r"TALLY:\s*supports=(\d+)\s+refutes=(\d+)\s+neutral=(\d+)\s+sources=(\d+)")
+
+
+def default_consensus(request: LLMRequest) -> dict:
+    match = _TALLY.search(request.prompt)
+    supports, refutes, _neutral, sources = (
+        (int(match.group(1)), int(match.group(2)), int(match.group(3)), int(match.group(4)))
+        if match
+        else (0, 0, 0, 0)
+    )
+    total = supports + refutes
+    if total == 0:
+        return {
+            "overall": "No retrieved source takes a position on the question.",
+            "strength": "absent",
+            "key_agreements": [],
+            "key_disagreements": [],
+            "research_gaps": ["No evidence for or against was retrieved."],
+            "confidence": 0.0,
+        }
+    margin = (supports - refutes) / total
+    strength = (
+        "strong"
+        if abs(margin) > 0.6 and sources >= 3
+        else "moderate"
+        if abs(margin) > 0.3
+        else "weak"
+    )
+    return {
+        "overall": (
+            f"Mock consensus: {supports} supporting vs {refutes} refuting claims "
+            f"from {sources} sources."
+        ),
+        "strength": strength,
+        "key_agreements": ["Mock agreement derived from the tally."],
+        "key_disagreements": ["Mock disagreement derived from the tally."] if refutes else [],
+        "research_gaps": [],
+        "confidence": round(0.4 + abs(margin) * 0.5, 2),
+    }
+
+
+_SOURCE_LINE = re.compile(r"^- \[([a-z_]+:[^\]\s]+)\]", re.M)
+
+
+def default_answer(request: LLMRequest) -> dict:
+    ids = _SOURCE_LINE.findall(_section(request.prompt, "SOURCES") or request.prompt)[:3]
+    cited = " ".join(f"[{i}]" for i in ids) or "[unknown:0000]"
+    return {
+        "answer": (
+            "Mock answer. The retrieved evidence is summarised here with citations to the "
+            f"sources gathered in this run {cited}. Contradicting evidence and the minority "
+            "view are noted, and confidence reflects the evidence tally."
+        ),
+        "confidence": 0.6,
+    }
+
+
 DEFAULT_HANDLERS: dict[str, Handler] = {
     "extract_claims": default_extract_claims,
     "resolve_conflict": default_resolve_conflict,
+    "plan": default_plan,
+    "consensus": default_consensus,
+    "answer": default_answer,
 }
 
 

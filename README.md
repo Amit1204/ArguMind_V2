@@ -13,21 +13,21 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 3 (Citation graph and conflict resolution) complete.**
-> Docker Compose environment, PostgreSQL schema with forward-only migrations,
-> FastAPI service with health, readiness, system status and Prometheus
-> metrics, request ids and JSON logs, a React shell with an Overview page,
-> CI; the evidence building blocks: typed **arXiv and Wikipedia clients** with
-> retries, a per-host throttle and a database-backed search cache, a
-> **provider-agnostic model layer** (Gemini free tier or a deterministic
-> mock) with structured output, tier fallback, a daily request budget and
-> cost accounting, **claim extraction with stance** and deterministic ids;
-> and now the **citation graph** in which every claim's stance becomes a
-> `supports` or `refutes` edge, so **conflicts are detected by construction**,
-> plus a **conflict resolver** that scores both sides deterministically, asks
-> the model to arbitrate only when the margin is close, records its
-> reasoning, keeps the losing side as a minority report and adds
-> `supersedes` edges. The pipeline that assembles these per run is Phase 4.
+> **Status: Phase 4 (Pipeline and persistence) complete.** The system now
+> answers questions end to end through the API. A **LangGraph pipeline**
+> plans sub-questions, gathers from **arXiv and Wikipedia** (typed clients,
+> retries, throttle, database-backed cache), extracts **claims with stance**
+> and deterministic ids through a **provider-agnostic model layer** (Gemini
+> free tier or a deterministic mock), builds a **citation graph** in which
+> disagreement is explicit and **conflicts are detected by construction**,
+> resolves them with deterministic scoring plus model arbitration only when
+> close, clusters topics, forms a consensus, passes a **rule-based critic**
+> that may trigger one broadened retry or declare the evidence
+> **inconclusive**, writes a cited answer and **verifies every citation**
+> against the sources retrieved in that run. Every run is **persisted** stage
+> by stage in PostgreSQL and exposed through a runs API. Foundation from the
+> earlier phases: Docker Compose, forward-only migrations, health and
+> readiness, request ids, JSON logs, Prometheus metrics, a React shell and CI.
 > Each section below states what is **implemented** versus **planned**; the
 > phase plan is in [`docs/specification.md`](docs/specification.md).
 
@@ -62,20 +62,24 @@ receive:
 - a citation graph you can inspect;
 - or an explicit *inconclusive* verdict with the reasons.
 
-**Implemented today (Phases 1-3):** the environment, database, API skeleton,
-UI shell, source retrieval with caching, the model layer, claim extraction
-with stance ([`docs/evidence.md`](docs/evidence.md)), the citation graph and
-conflict resolution ([`docs/graph.md`](docs/graph.md)). You can already
-search sources through the API and run the whole evidence chain on one
-question from the command line:
+**Implemented today (Phases 1-4):** all of the above through the API. Ask a
+question and wait for the answer:
 
 ```bash
-curl -s "localhost:8100/api/v1/sources/search?q=Do%20LLMs%20understand%20language&limit=3" | python3 -m json.tool
-docker compose run --rm backend python -m app.evidence.cli "Do LLMs understand language?" --graph
+curl -s -X POST "localhost:8100/api/v1/runs?wait=true" -H 'Content-Type: application/json' \
+  -d '{"question":"Do large language models understand language?"}' | python3 -m json.tool
 ```
 
-**Planned:** the LangGraph pipeline with persistence and API (Phase 4), the
-remaining UI pages, reliability controls and the benchmark (see the roadmap).
+The response holds the answer with `[source_id]` citations, the sub-questions,
+every source and claim with its stance, the conflicts and how they were
+resolved (with the minority view), the topic clusters, the consensus, the
+critic's verdict, the citation verification, the caveats, and every stage
+with its timing and model usage. `GET /api/v1/runs/{id}/graph` returns the
+citation graph. Details: [`docs/pipeline.md`](docs/pipeline.md),
+[`docs/evidence.md`](docs/evidence.md), [`docs/graph.md`](docs/graph.md).
+
+**Planned:** the Ask, Evidence, Graph and Runs pages (Phase 5), reliability
+controls and metrics per stage (Phase 6), the benchmark (Phase 7).
 
 ## 2. Architecture
 
@@ -97,7 +101,7 @@ Design records: [`docs/decisions/`](docs/decisions/).
 | Model | Google Gemini via `google-genai`, or a deterministic mock | 2.23, free tier |
 | Sources | arXiv API, Wikipedia API via httpx + defusedxml | 0.28, 0.7 |
 | Graph | NetworkX | 3.6 |
-| Orchestration | LangGraph (Phase 4) | pinned at install |
+| Orchestration | LangGraph (state machine only, no LangChain chains) | 1.2 |
 | Frontend | React, Vite, TypeScript, react-router | 18, 8, 5.6, 7 |
 | Metrics | prometheus-client | 0.21 |
 | Tooling | pytest, ruff, GitHub Actions | 9.0, 0.7.4 |
@@ -161,10 +165,18 @@ docker compose run --rm --no-deps backend python -m pytest -q
 docker compose run --rm --no-deps db-migrate python -m pytest -q
 ```
 
-Unit tests (76 backend, 5 migration) never need a database, network or API
+Unit tests (130 backend, 5 migration) never need a database, network or API
 key: source clients are tested against recorded arXiv and Wikipedia
-responses through an httpx mock transport, and the Gemini provider against a
-fake SDK client. CI
+responses through an httpx mock transport, the Gemini provider against a fake
+SDK client, and the whole pipeline end to end with the mock model, canned
+sources and an in-memory run store. An opt-in integration test runs the
+pipeline against PostgreSQL:
+
+```bash
+docker compose run --rm -e RUN_INTEGRATION_TESTS=1 backend python -m pytest -q tests/test_integration_db.py
+```
+
+CI
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)) additionally
 starts the whole stack and checks readiness, the migrated schema version,
 metrics, request-id headers, the frontend proxy, and that re-running the
@@ -191,7 +203,7 @@ ArguMind/
 | 1 | Foundation: Compose, migrations, API skeleton, observability basics, UI shell, CI | **Complete** |
 | 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | **Complete** |
 | 3 | Citation graph with real `refutes` edges, conflict detection and resolution | **Complete** |
-| 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Planned |
+| 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | **Complete** |
 | 5 | Ask, Evidence, Graph and Runs pages | Planned |
 | 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | Planned |
 | 7 | Benchmark with deterministic graders and committed reports | Planned |
@@ -199,12 +211,18 @@ ArguMind/
 
 ## 9. Limitations
 
-- Nothing answers questions through the API yet: sources, claims, the graph
-  and conflict resolution exist and can be exercised from the CLI; the
-  pipeline that runs them per request with persistence is Phase 4.
+- Runs are slow on the free tier: a question costs roughly 8-15 model calls
+  (one per source for extraction plus plan, consensus, answer and any
+  arbitration) and 30-120 seconds, mostly waiting on rate-limited APIs. The
+  UI to follow a run live is Phase 5.
 - Conflicts are detected per sub-question, the proposition every claim's
-  stance was judged against. Finer, pairwise conflicts within a topic need
-  the semantic clustering of Phase 4.
+  stance was judged against; topic clusters flag pairwise disagreement within
+  a topic but the resolver does not yet act on cluster-level conflicts.
+- The critic judges sufficiency and coherence with rules; it cannot judge
+  explanation quality. Two backend replicas would each have their own worker
+  pool: a shared job queue is documented, not built.
+- Failed runs keep the stages that completed but not the evidence gathered
+  after the last persisted stage.
 - The resolver's authority priors, recency curve and evidence-type weights
   are explicit constants chosen by judgement, not fitted; the Phase 7
   benchmark is where they get challenged.

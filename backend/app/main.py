@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import health, sources, system
+from app.api import health, runs, sources, system
 from app.api import metrics as metrics_api
 from app.config import Settings, get_settings
 from app.db import dispose_engines
@@ -29,6 +29,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         extra={"environment": settings.app_env, "llm_provider": settings.llm_provider},
     )  # fmt: skip
     yield
+    executor = getattr(app.state, "run_executor", None)
+    if executor is not None:
+        executor.shutdown()
     dispose_engines()
     log.info("%s stopped", settings.app_name)
 
@@ -74,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(metrics_api.router)
     app.include_router(system.router)
     app.include_router(sources.router)
+    app.include_router(runs.router)
     return app
 
 

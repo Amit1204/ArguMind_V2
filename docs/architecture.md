@@ -35,7 +35,8 @@ flowchart TD
 | Retry policy with jittered backoff (shared by sources and model layer) | **Implemented** (Phase 2) | `backend/app/reliability/retry.py` |
 | Citation graph (questions, sources, claims; `supports`/`refutes` stance edges, `extends`, `supersedes`), conflict detection by construction, validated serialisation | **Implemented** (Phase 3) | `backend/app/graph/`, `docs/graph.md` |
 | Conflict resolver: authority × recency × evidence-type × confidence scoring, model arbitration for close margins with recorded reasoning, minority reports, `supersedes` edges | **Implemented** (Phase 3) | `backend/app/reasoning/`, ADR-006 |
-| LangGraph pipeline, critic loop, verified answer, run persistence and API | Designed (Phase 4) | `backend/app/pipeline/` |
+| LangGraph pipeline: plan → gather → extract → graph → resolve → cluster (`extends` edges) → consensus → rule-based critic with one broadened retry → cited answer → citation verification; time budget; deterministic fallbacks; `inconclusive` outcome | **Implemented** (Phase 4) | `backend/app/pipeline/`, `docs/pipeline.md`, ADR-007 |
+| Run persistence (runs, stages as they complete, sources, claims, edges) with memory and PostgreSQL stores; runs API (`POST /runs`, list, detail, graph) on a bounded worker pool | **Implemented** (Phase 4) | `backend/app/pipeline/store.py`, `backend/app/api/runs.py` |
 | Ask, Evidence, Graph and Runs pages | Designed (Phase 5) | `frontend/src/pages/` |
 | Pipeline metrics, retries with jitter, circuit breakers, run deadline, rate limit | Designed (Phase 6) | `backend/app/reliability/` |
 | Benchmark with deterministic graders and committed reports | Designed (Phase 7) | `backend/app/evaluation/`, `evaluation/reports/` |
@@ -93,10 +94,11 @@ Ports differ from the copilot's (3000/8000/5432) so both stacks can run side by 
 ```
 ArguMind/
 ├── backend/            FastAPI service (app/, tests/, Dockerfile)
-│   └── app/            api/, llm/, sources/, evidence/, graph/, reasoning/, reliability/, observability/
+│   └── app/            api/, pipeline/, llm/, sources/, evidence/, graph/, reasoning/,
+│                       reliability/, observability/, services/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
-├── docs/               specification, architecture, evidence, ADRs
+├── docs/               specification, architecture, evidence, graph, pipeline, ADRs
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment
 ├── Makefile            convenience targets (all run inside Docker)

@@ -59,6 +59,17 @@ class Settings(BaseSettings):
 
     # --- Pipeline ----------------------------------------------------------
     run_timeout_seconds: int = Field(default=180, ge=10, le=900)
+    # Share of the run budget that gathering may consume, so reasoning always has time.
+    gather_budget_fraction: float = Field(default=0.5, ge=0.1, le=0.9)
+    max_sub_questions: int = Field(default=3, ge=1, le=4)
+    max_claims_per_source: int = Field(default=5, ge=1, le=8)
+    # The critic may send the pipeline back to gather this many times.
+    max_iterations: int = Field(default=1, ge=0, le=3)
+    min_evidence_claims: int = Field(default=2, ge=1)
+    min_evidence_sources: int = Field(default=2, ge=1)
+    cluster_similarity_threshold: float = Field(default=0.35, ge=0.05, le=0.95)
+    # Concurrent pipeline runs per backend process.
+    run_workers: int = Field(default=2, ge=1, le=8)
 
     @field_validator("log_level")
     @classmethod
