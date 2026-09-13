@@ -29,9 +29,10 @@ flowchart TD
 | Request ids end to end, JSON logs, Prometheus HTTP metrics, JSON 500 envelope | **Implemented** (Phase 1) | `backend/app/observability/` |
 | React SPA shell with Overview page (readiness, system status) | **Implemented** (Phase 1) | `frontend/src/` |
 | CI: lint, unit tests, frontend build, full-stack smoke test, image builds | **Implemented** (Phase 1) | `.github/workflows/` |
-| Source clients (arXiv, Wikipedia) with caching and retries | Designed (Phase 2) | `backend/app/sources/` |
-| Model layer (Gemini + mock), structured output, budget, cost | Designed (Phase 2) | `backend/app/llm/` |
-| Claim extraction with stance and deterministic ids | Designed (Phase 2) | `backend/app/evidence/` |
+| Source clients (arXiv, Wikipedia): typed results, retries, per-host throttle, database-backed search cache, per-source failure isolation, `/api/v1/sources/search` | **Implemented** (Phase 2) | `backend/app/sources/`, `docs/evidence.md` |
+| Model layer: `LLMProvider` with Gemini and deterministic mock, JSON-schema output, tier fallback, daily request budget, price table, usage ledger | **Implemented** (Phase 2) | `backend/app/llm/`, ADR-004 |
+| Claim extraction with stance, deterministic ids, dedup and caps; manual CLI check | **Implemented** (Phase 2) | `backend/app/evidence/`, ADR-005 |
+| Retry policy with jittered backoff (shared by sources and model layer) | **Implemented** (Phase 2) | `backend/app/reliability/retry.py` |
 | Citation graph with real `refutes` edges, conflict detection and resolution | Designed (Phase 3) | `backend/app/graph/`, `backend/app/reasoning/` |
 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Designed (Phase 4) | `backend/app/pipeline/` |
 | Ask, Evidence, Graph and Runs pages | Designed (Phase 5) | `frontend/src/pages/` |
@@ -91,9 +92,10 @@ Ports differ from the copilot's (3000/8000/5432) so both stacks can run side by 
 ```
 ArguMind/
 ├── backend/            FastAPI service (app/, tests/, Dockerfile)
+│   └── app/            api/, llm/, sources/, evidence/, reliability/, observability/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
-├── docs/               specification, architecture, ADRs
+├── docs/               specification, architecture, evidence, ADRs
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment
 ├── Makefile            convenience targets (all run inside Docker)

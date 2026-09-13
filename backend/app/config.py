@@ -38,8 +38,24 @@ class Settings(BaseSettings):
     llm_model_fast: str = "gemini-3.5-flash-lite"
     llm_model_standard: str = "gemini-3-flash-preview"
     llm_timeout_seconds: int = Field(default=45, ge=5, le=300)
+    llm_max_retries: int = Field(default=2, ge=0, le=5)
+    # Gemini 3 thinking depth for the standard tier (low | medium | high); blank disables.
+    llm_thinking_level: str = Field(default="low", pattern="^(|low|medium|high)$")
     # Local guard so a runaway loop cannot exhaust the provider's daily quota.
     llm_daily_request_limit: int = Field(default=1000, ge=1)
+    # Optional USD-per-million-token prices, e.g. {"model": {"input": 0.3, "output": 2.5}}.
+    llm_price_table_json: str = ""
+
+    # --- Sources -----------------------------------------------------------
+    source_timeout_seconds: int = Field(default=15, ge=1, le=120)
+    source_retry_attempts: int = Field(default=3, ge=1, le=6)
+    source_cache_ttl_hours: int = Field(default=24, ge=1, le=24 * 30)
+    arxiv_max_results: int = Field(default=5, ge=1, le=25)
+    # arXiv's API terms: at most one request every 3 seconds per client.
+    arxiv_min_interval_seconds: float = Field(default=3.0, ge=0, le=30)
+    # arXiv slow-walks recently throttled clients for a while; give it more time.
+    arxiv_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    wikipedia_max_results: int = Field(default=3, ge=1, le=10)
 
     # --- Pipeline ----------------------------------------------------------
     run_timeout_seconds: int = Field(default=180, ge=10, le=900)

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <link href="http://arxiv.org/api/query?search_query=all:language%20AND%20all:models" rel="self" type="application/atom+xml"/>
+  <title type="html">ArXiv Query: search_query=all:language AND all:models</title>
+  <id>http://arxiv.org/api/abc123</id>
+  <updated>2026-09-01T00:00:00-04:00</updated>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2301.12345v2</id>
+    <updated>2023-02-01T12:00:00Z</updated>
+    <published>2023-01-29T18:00:00Z</published>
+    <title>Do Language Models Understand
+  Language? A Benchmark Study</title>
+    <summary>  We evaluate whether large language models understand language by testing them on
+  compositional generalization tasks. Results show strong performance on in-distribution
+  data. However, models fail systematically on novel compositions, suggesting that
+  surface statistics rather than understanding drive their behavior.
+</summary>
+    <author><name>Ada  Lovelace</name></author>
+    <author><name>Grace Hopper</name></author>
+    <link href="http://arxiv.org/abs/2301.12345v2" rel="alternate" type="text/html"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.CL"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9901001v1</id>
+    <updated>1999-01-05T00:00:00Z</updated>
+    <published>1999-01-04T00:00:00Z</published>
+    <title>An Old-Style Identifier Paper</title>
+    <summary>A theoretical argument about symbol grounding.</summary>
+    <author><name>Alan Turing</name></author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/broken</id>
+    <title>Entry with an unrecognised identifier</title>
+    <summary>Should be skipped.</summary>
+  </entry>
+</feed>

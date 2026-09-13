@@ -32,8 +32,9 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S105", "S106"]
-# The migration job is a CLI; its progress output is intentional.
+# The migration job and the evidence check are CLIs; their output is intentional.
 "database/migrate.py" = ["T201"]
+"**/evidence/cli.py" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "database/tests"]

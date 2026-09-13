@@ -73,6 +73,8 @@ jobs:
         run: |
           curl -fsS http://localhost:8100/metrics | grep -q argumind_http_requests_total
           test -n "$(curl -fsS -D - -o /dev/null http://localhost:8100/health | grep -i x-request-id)"
+      - name: Source search validates input without touching the network
+        run: test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8100/api/v1/sources/search?q=ab')" = "422"
       - name: Frontend serves the app and proxies the API
         run: |
           curl -fsS http://localhost:3100/ | grep -q '<div id="root">'

@@ -13,13 +13,18 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 1 (Foundation) complete.** Docker Compose environment,
-> PostgreSQL schema with forward-only migrations, FastAPI service with health,
-> readiness, system status and Prometheus metrics, request ids and JSON logs,
-> a React shell with an Overview page, and CI (lint, unit tests, frontend
-> build, full-stack smoke test, image builds). The pipeline itself is not
-> built yet; each section below states what is **implemented** versus
-> **planned**. The phase plan is in [`docs/specification.md`](docs/specification.md).
+> **Status: Phase 2 (Sources and model layer) complete.** Docker Compose
+> environment, PostgreSQL schema with forward-only migrations, FastAPI service
+> with health, readiness, system status and Prometheus metrics, request ids
+> and JSON logs, a React shell with an Overview page, CI, and now the evidence
+> building blocks: typed **arXiv and Wikipedia clients** with retries, a
+> per-host throttle and a database-backed search cache; a **provider-agnostic
+> model layer** (Gemini free tier or a deterministic mock) with structured
+> output, tier fallback, a daily request budget and cost accounting; and
+> **claim extraction with stance** and deterministic ids. The pipeline that
+> assembles them is Phase 4. Each section below states what is
+> **implemented** versus **planned**; the phase plan is in
+> [`docs/specification.md`](docs/specification.md).
 
 ---
 
@@ -52,8 +57,17 @@ receive:
 - a citation graph you can inspect;
 - or an explicit *inconclusive* verdict with the reasons.
 
-**Implemented today (Phase 1):** the environment, database, API skeleton and
-UI shell. **Planned:** everything above, phase by phase (see the roadmap).
+**Implemented today (Phases 1-2):** the environment, database, API skeleton,
+UI shell, source retrieval with caching, the model layer, and claim
+extraction with stance (see [`docs/evidence.md`](docs/evidence.md)). You can
+already search sources through the API:
+
+```bash
+curl -s "localhost:8100/api/v1/sources/search?q=Do%20LLMs%20understand%20language&limit=3" | python3 -m json.tool
+```
+
+**Planned:** the citation graph, conflict resolution, the full pipeline and
+the remaining UI pages, phase by phase (see the roadmap).
 
 ## 2. Architecture
 
@@ -72,7 +86,8 @@ Design records: [`docs/decisions/`](docs/decisions/).
 |-------|--------|---------|
 | API | FastAPI / Starlette / uvicorn | 0.141 / 1.6 / 0.32 |
 | Database | PostgreSQL, SQLAlchemy, psycopg | 16, 2.0, 3.2 |
-| Model | Google Gemini via `google-genai` (Phase 2) | free tier |
+| Model | Google Gemini via `google-genai`, or a deterministic mock | 2.23, free tier |
+| Sources | arXiv API, Wikipedia API via httpx + defusedxml | 0.28, 0.7 |
 | Orchestration | LangGraph (Phase 4) | pinned at install |
 | Frontend | React, Vite, TypeScript, react-router | 18, 8, 5.6, 7 |
 | Metrics | prometheus-client | 0.21 |
@@ -100,8 +115,13 @@ Then:
 
 The stack runs without a model key (`LLM_PROVIDER=mock`, or leave the key
 blank: readiness then reports the provider as an optional, not configured
-check). A Gemini key is only needed once the pipeline exists (Phase 2+):
-create one at https://aistudio.google.com and set `LLM_API_KEY` in `.env`.
+check). For real extraction, create a free Gemini key at
+https://aistudio.google.com and set `LLM_API_KEY` in `.env`. A quick
+end-to-end check of retrieval plus extraction:
+
+```bash
+docker compose run --rm backend python -m app.evidence.cli "Do LLMs understand language?" --arxiv 2 --wikipedia 1
+```
 
 Stop with `docker compose down` (keeps the data volume) or
 `docker compose down -v` (wipes it; migrations re-run on next start).
@@ -132,7 +152,10 @@ docker compose run --rm --no-deps backend python -m pytest -q
 docker compose run --rm --no-deps db-migrate python -m pytest -q
 ```
 
-Unit tests never need a database, network or API key. CI
+Unit tests (76 backend, 5 migration) never need a database, network or API
+key: source clients are tested against recorded arXiv and Wikipedia
+responses through an httpx mock transport, and the Gemini provider against a
+fake SDK client. CI
 ([`.github/workflows/test.yml`](.github/workflows/test.yml)) additionally
 starts the whole stack and checks readiness, the migrated schema version,
 metrics, request-id headers, the frontend proxy, and that re-running the
@@ -157,7 +180,7 @@ ArguMind/
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Foundation: Compose, migrations, API skeleton, observability basics, UI shell, CI | **Complete** |
-| 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | Planned |
+| 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | **Complete** |
 | 3 | Citation graph with real `refutes` edges, conflict detection and resolution | Planned |
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Planned |
 | 5 | Ask, Evidence, Graph and Runs pages | Planned |
@@ -167,11 +190,17 @@ ArguMind/
 
 ## 9. Limitations
 
-- Nothing answers questions yet: Phase 1 is infrastructure only.
+- Nothing answers questions yet: sources and claims exist, the pipeline that
+  reasons over them is Phase 4.
+- The arXiv API allows roughly one request every three seconds per client
+  and answers bursts with HTTP 429 for a while. The client throttles itself
+  and backs off, and a throttled arXiv is reported as a per-source error
+  while Wikipedia results still return. Wikipedia lead sections are
+  descriptive, so their claims are mostly `neutral`; the discriminating
+  evidence comes from papers.
 - Cloud deployment is out of scope by decision; Docker Compose is the target.
-- Free-tier model quotas will bound how many runs per day are possible; the
-  request budget and cost accounting arrive in Phase 2 so the limit is
-  visible rather than surprising.
+- Free-tier model quotas bound how many runs per day are possible; the local
+  daily request budget makes the limit visible rather than surprising.
 
 ## 10. License
 

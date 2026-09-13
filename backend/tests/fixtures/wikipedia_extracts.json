@@ -1,0 +1,10 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "pages": {
+      "67059384": {"pageid": 67059384, "ns": 0, "title": "Large language model", "extract": "A large language model (LLM) is a language model trained with self-supervised machine learning on a vast amount of text.\nLLMs can be used for language generation and other natural language processing tasks."},
+      "1226519": {"pageid": 1226519, "ns": 0, "title": "Natural-language understanding", "extract": "Natural-language understanding (NLU) is a subtopic of natural language processing that deals with machine reading comprehension."},
+      "5951": {"pageid": 5951, "ns": 0, "title": "Chinese room", "extract": "The Chinese room argument holds that a computer executing a program cannot have a mind, understanding, or consciousness, regardless of how intelligently it may behave."}
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "batchcomplete": "",
+  "continue": {"sroffset": 3, "continue": "-||"},
+  "query": {
+    "searchinfo": {"totalhits": 1234},
+    "search": [
+      {"ns": 0, "title": "Large language model", "pageid": 67059384, "size": 90000, "wordcount": 9000, "snippet": "A <span class=\"searchmatch\">large language model</span> (LLM) is a language model...", "timestamp": "2026-08-30T10:00:00Z"},
+      {"ns": 0, "title": "Natural-language understanding", "pageid": 1226519, "size": 20000, "wordcount": 2000, "snippet": "Natural-language understanding (NLU) is a subtopic...", "timestamp": "2026-07-01T10:00:00Z"},
+      {"ns": 0, "title": "Chinese room", "pageid": 5951, "size": 60000, "wordcount": 6000, "snippet": "The Chinese room argument holds that a computer...", "timestamp": "2026-06-01T10:00:00Z"}
+    ]
+  }
+}
