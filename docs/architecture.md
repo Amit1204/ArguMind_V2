@@ -42,7 +42,7 @@ flowchart TD
 | Reliability: circuit breakers per source and for the model, per-client rate limit and queue cap with `Retry-After`, plus the earlier retries, throttle, budget, time budget and deterministic fallbacks; documented failure drills | **Implemented** (Phase 6) | `backend/app/reliability/`, `docs/reliability.md`, ADR-009 |
 | Benchmark: 30 YAML cases in 7 categories, deterministic graders over run detail (outcome, evidence, conflicts, citation fidelity, answer, safety, cost), runner with transient retry and resume, Markdown + JSON reports with regressions; `make evaluate` | **Implemented** (Phase 7) | `backend/app/evaluation/`, `docs/evaluation.md`, ADR-010 |
 | Baseline report against the real model and live sources | Pending: blocked by arXiv rate limiting on the build day and no model key in `.env`; procedure in `docs/evaluation.md` §4 | `evaluation/reports/` |
-| Security review, final docs, publication | Designed (Phase 8) | — |
+| Security review (threat model, controls, dependency audits clean), demo script, interview notes, clean-volume validation, publication to GitHub with CI green | **Implemented** (Phase 8) | `docs/security.md`, `docs/demo.md`, `docs/interview-questions.md` |
 
 ## Runtime view (Phase 1)
 
@@ -101,7 +101,8 @@ ArguMind/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
 ├── docs/               specification, architecture, evidence, graph, pipeline, frontend,
-│                       observability, reliability, ADRs
+│                       observability, reliability, evaluation, security, demo,
+│                       interview questions, ADRs
 ├── observability/      Prometheus config, Grafana provisioning and dashboard
 ├── evaluation/reports/ committed benchmark reports (latest.md / latest.json)
 ├── docker-compose.observability.yml   optional Prometheus + Grafana overlay

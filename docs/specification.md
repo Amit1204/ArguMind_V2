@@ -10,6 +10,12 @@ This document is the contract for the rebuild. It fixes scope, architecture,
 quality rules and the phase plan. Work proceeds strictly phase by phase; each
 phase ends with a Phase Completion Report and a commit.
 
+> **Status (2026-09-14):** all eight phases delivered and published at
+> https://github.com/Amit1204/ArguMind_V2. The one deliverable still open is
+> the baseline benchmark report against the real model and live arXiv, which
+> was blocked by arXiv rate limiting on the build day; the procedure is in
+> `docs/evaluation.md` §4.
+
 ## 1. Why a rebuild
 
 The first ArguMind (github.com/Amit1204/ArguMind) proved the idea but not the

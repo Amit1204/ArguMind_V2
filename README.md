@@ -7,179 +7,163 @@ hiding the losing view, and produces an answer whose every citation is
 verified against the evidence it collected. When the evidence does not support
 a conclusion, it says so.
 
-Built as a forward-deployed-engineering portfolio project, a ground-up rebuild
+Built as a forward-deployed-engineering portfolio project: a ground-up rebuild
 of an earlier prototype ([why](docs/decisions/ADR-001-rebuild-and-scope.md)),
 to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 7 (Evaluation) complete; baseline run pending.** The system
-> answers questions end to end, in the browser and through the API, and it is
-> **measured**: a 30-case **benchmark** (settled, contested, comparative,
-> no-evidence, speculative, prompt-injection and validation questions) is
-> graded deterministically on outcome, evidence, conflicts surfaced, citation
-> fidelity, answer, safety and cost, with committed reports and regression
-> comparison (`make evaluate`). The first full run against the real model
-> awaits arXiv's rate limit lifting and a model key in `.env`; see
-> [`docs/evaluation.md`](docs/evaluation.md). It is also
-> **observable and self-protecting**: metrics for runs, stages, model
-> calls, source calls and circuit breakers on `/metrics`, an operations
-> summary on the Overview page, a request id in every log line and error
-> response, an optional Prometheus and Grafana overlay, **circuit breakers**
-> per source and for the model, a **per-client rate limit** and a queue cap
-> with `Retry-After`, and documented **failure drills**. The **web UI** has an Ask page
-> that shows each pipeline stage as it completes, a run view with the cited
-> answer, the evidence (sources, claims by stance, conflicts with minority
-> views, topic clusters), an interactive **citation graph** and the stage
-> timeline, plus a run history. Underneath, a **LangGraph pipeline**
-> plans sub-questions, gathers from **arXiv and Wikipedia** (typed clients,
-> retries, throttle, database-backed cache), extracts **claims with stance**
-> and deterministic ids through a **provider-agnostic model layer** (Gemini
-> free tier or a deterministic mock), builds a **citation graph** in which
-> disagreement is explicit and **conflicts are detected by construction**,
-> resolves them with deterministic scoring plus model arbitration only when
-> close, clusters topics, forms a consensus, passes a **rule-based critic**
-> that may trigger one broadened retry or declare the evidence
-> **inconclusive**, writes a cited answer and **verifies every citation**
-> against the sources retrieved in that run. Every run is **persisted** stage
-> by stage in PostgreSQL and exposed through a runs API. Foundation from the
-> earlier phases: Docker Compose, forward-only migrations, health and
-> readiness, request ids, JSON logs, Prometheus metrics, a React shell and CI.
-> Each section below states what is **implemented** versus **planned**; the
-> phase plan is in [`docs/specification.md`](docs/specification.md).
+> **Status: all eight phases complete.** One deliverable remains open: the
+> baseline benchmark report against the real model and live arXiv, which was
+> blocked by arXiv rate limiting on the build day ([how to run it](docs/evaluation.md#4-baseline)).
+> Everything below is **implemented** unless marked otherwise.
 
 ---
 
 ## Contents
 
-1. [What it will do](#1-what-it-will-do)
-2. [Architecture](#2-architecture)
-3. [Technology stack](#3-technology-stack)
-4. [Quick start](#4-quick-start)
-5. [Configuration](#5-configuration)
-6. [Testing](#6-testing)
-7. [Project structure](#7-project-structure)
-8. [Roadmap](#8-roadmap)
-9. [Limitations](#9-limitations)
-10. [License](#10-license)
+1. [What it does](#1-what-it-does)
+2. [How it works](#2-how-it-works)
+3. [What changed from the first version](#3-what-changed-from-the-first-version)
+4. [Technology stack](#4-technology-stack)
+5. [Quick start](#5-quick-start)
+6. [Configuration](#6-configuration)
+7. [Testing and CI](#7-testing-and-ci)
+8. [Operations](#8-operations)
+9. [Evaluation](#9-evaluation)
+10. [Security](#10-security)
+11. [Project structure](#11-project-structure)
+12. [Phases](#12-phases)
+13. [Limitations](#13-limitations)
+14. [License](#14-license)
 
 ---
 
-## 1. What it will do
+## 1. What it does
 
-Ask a question such as *"Do large language models truly understand
-language?"* or *"Does intermittent fasting improve longevity in humans?"* and
-receive:
+Ask a question such as *"Do large language models understand language?"* in
+the web UI at http://localhost:3100, or through the API, and receive:
 
-- an answer with numbered citations that resolve to the sources actually
-  retrieved in that run;
-- the claims behind it, each marked as supporting, refuting or neutral;
+- a direct answer with `[source_id]` citations that resolve to the sources
+  actually retrieved in that run, rendered as links;
+- the claims behind it, each marked as supporting, refuting or neutral, with
+  the source, evidence type and the source's own confidence;
 - the conflicts the evidence contains, how each was resolved, and the
   minority view that lost;
-- a citation graph you can inspect;
-- or an explicit *inconclusive* verdict with the reasons.
+- an interactive citation graph;
+- the caveats: which source was unavailable, what fell back, what was removed;
+- or an explicit **inconclusive** verdict with the critic's reasons, instead
+  of a confident answer over missing evidence.
 
-**Implemented today (Phases 1-5):** all of the above, in the web UI at
-http://localhost:3100 (Ask, Runs, Overview; see
-[`docs/frontend.md`](docs/frontend.md)) and through the API. From the
-command line, ask a question and wait for the answer:
+Every run is persisted stage by stage, so progress is visible while it
+executes and the whole chain of evidence can be audited afterwards.
 
 ```bash
 curl -s -X POST "localhost:8100/api/v1/runs?wait=true" -H 'Content-Type: application/json' \
   -d '{"question":"Do large language models understand language?"}' | python3 -m json.tool
 ```
 
-The response holds the answer with `[source_id]` citations, the sub-questions,
-every source and claim with its stance, the conflicts and how they were
-resolved (with the minority view), the topic clusters, the consensus, the
-critic's verdict, the citation verification, the caveats, and every stage
-with its timing and model usage. `GET /api/v1/runs/{id}/graph` returns the
-citation graph. Details: [`docs/pipeline.md`](docs/pipeline.md),
-[`docs/evidence.md`](docs/evidence.md), [`docs/graph.md`](docs/graph.md).
+## 2. How it works
 
-Operations: [`docs/observability.md`](docs/observability.md) and
-[`docs/reliability.md`](docs/reliability.md). Optional dashboards:
+A LangGraph state machine runs ten stages per question
+([`docs/pipeline.md`](docs/pipeline.md)):
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
-# Grafana http://localhost:3101 (admin/admin), Prometheus http://localhost:9091
+```
+plan ─▶ gather ─▶ extract ─▶ build_graph ─▶ resolve_conflicts ─▶ cluster ─▶ consensus ─▶ critic
+                                                        retry once (broadened) ◀───────────┤
+                                                                       answer ─▶ verify ◀──┘
 ```
 
-Evaluation: [`docs/evaluation.md`](docs/evaluation.md). Run the benchmark
-against the live stack with `make evaluate EVAL_ARGS="--tag baseline"`;
-reports land in `evaluation/reports/`.
+| Stage | What it does | Doc |
+|-------|--------------|-----|
+| plan | 1-3 sub-questions; the first restates the question as a testable proposition | |
+| gather | arXiv and Wikipedia per sub-question: typed clients, retries, politeness throttle, database-backed cache, per-source failure isolation | [`evidence.md`](docs/evidence.md) |
+| extract | claims with stance and deterministic ids, one structured model call per source | [`evidence.md`](docs/evidence.md) |
+| build graph | stance becomes `supports` / `refutes` edges, so conflicts exist by construction | [`graph.md`](docs/graph.md) |
+| resolve conflicts | authority × recency × evidence-type × confidence scoring; model arbitration only when close; minority reports; `supersedes` edges | [`graph.md`](docs/graph.md) |
+| cluster | TF-IDF topic clusters, `extends` edges, contested topics | |
+| consensus | overall assessment, strength, agreements, disagreements, gaps | |
+| critic | rule-based gate: enough claims from enough sources? pass, retry or inconclusive | |
+| answer | cited Markdown; templates when inconclusive or when the model fails | |
+| verify | citations not retrieved in this run are removed and listed; uncited answers flagged | |
 
-**Planned:** the baseline benchmark report, then final review and publication
-(Phase 8).
+Model access goes through a small provider layer (Gemini free tier, or a
+deterministic mock for tests and key-less runs) with structured output, tier
+fallback, a daily request budget, cost accounting and a circuit breaker.
+Design records: [`docs/decisions/`](docs/decisions/) (ten ADRs).
 
-## 2. Architecture
+## 3. What changed from the first version
 
-See [`docs/architecture.md`](docs/architecture.md) for the diagrams and the
-implemented-versus-designed table. In one paragraph: a React SPA served by
-nginx calls a FastAPI backend on the same origin; the backend runs a LangGraph
-pipeline whose nodes call a provider-agnostic model layer (Gemini free tier,
-or a deterministic mock) and key-less source APIs (arXiv, Wikipedia); every
-run and everything it produced is persisted in PostgreSQL.
+The [original ArguMind](https://github.com/Amit1204/ArguMind) proved the idea
+and not the engineering. A review found that its headline feature never ran
+(no code created a `refutes` edge, so conflict detection had nothing to find),
+claim ids collided across papers, source ids changed every process, and there
+were no tests, no CI, no evaluation and no reproducible environment.
 
-Design records: [`docs/decisions/`](docs/decisions/).
+| | First version | This rebuild |
+|--|---------------|--------------|
+| Conflicts | never detected | by construction from stance edges; tested |
+| Identifiers | model-chosen `claim_1`, Python `hash()` | deterministic: arXiv id, URL digest, `source#n` |
+| Model layer | LangChain chains, silent parse failures | typed provider, schema-validated JSON, recorded errors |
+| Outcome when evidence is thin | confident answer | `inconclusive` with reasons |
+| Citations | trusted | verified against the run's sources; invented ones removed |
+| Progress | blocking request | persisted stages, polled by the UI |
+| Tests / CI | none | 157 unit tests, integration test, full-stack smoke, image builds |
+| Evaluation | none | 30-case benchmark with deterministic graders |
+| Operations | none | metrics, operations card, circuit breakers, rate limits, Grafana overlay |
+| Environment | Streamlit on Hugging Face | Docker Compose: FastAPI, PostgreSQL, React behind nginx |
 
-## 3. Technology stack
+## 4. Technology stack
 
 | Layer | Choice | Version |
 |-------|--------|---------|
 | API | FastAPI / Starlette / uvicorn | 0.141 / 1.6 / 0.32 |
-| Database | PostgreSQL, SQLAlchemy, psycopg | 16, 2.0, 3.2 |
+| Orchestration | LangGraph (state machine only, no LangChain chains) | 1.2 |
 | Model | Google Gemini via `google-genai`, or a deterministic mock | 2.23, free tier |
 | Sources | arXiv API, Wikipedia API via httpx + defusedxml | 0.28, 0.7 |
+| Database | PostgreSQL, SQLAlchemy, psycopg | 16, 2.0, 3.2 |
 | Graph | NetworkX | 3.6 |
-| Orchestration | LangGraph (state machine only, no LangChain chains) | 1.2 |
-| Frontend | React, Vite, TypeScript, react-router | 18, 8, 5.6, 7 |
-| Metrics | prometheus-client | 0.21 |
+| Frontend | React, Vite, TypeScript, react-router; nginx | 18, 8, 5.6, 7 |
+| Metrics | prometheus-client; optional Prometheus + Grafana overlay | 0.21 |
 | Tooling | pytest, ruff, GitHub Actions | 9.0, 0.7.4 |
 
-## 4. Quick start
+## 5. Quick start
 
 Requirements on the host: Git, Docker (with Compose v2) and a browser. No
 Python or Node installation is needed.
 
 ```bash
-git clone <this repository> ArguMind && cd ArguMind
+git clone https://github.com/Amit1204/ArguMind_V2.git ArguMind && cd ArguMind
 cp .env.example .env            # optional; every value has a working default
 docker compose up --build       # first run: 1-2 minutes
 ```
 
-Then:
-
 | URL | What |
 |-----|------|
-| http://localhost:3100 | Web UI (Overview, Ask, Runs) |
+| http://localhost:3100 | Web UI: Overview, Ask, Runs |
 | http://localhost:8100/docs | API documentation (Swagger UI) |
 | http://localhost:8100/ready | Readiness: database, schema, model provider |
 | http://localhost:8100/metrics | Prometheus metrics |
 
-The stack runs without a model key (`LLM_PROVIDER=mock`, or leave the key
-blank: readiness then reports the provider as an optional, not configured
-check). For real extraction, create a free Gemini key at
-https://aistudio.google.com and set `LLM_API_KEY` in `.env`. A quick
-end-to-end check of retrieval plus extraction:
-
-```bash
-docker compose run --rm backend python -m app.evidence.cli "Do LLMs understand language?" --arxiv 2 --wikipedia 1
-```
+For real answers, create a free Gemini key at https://aistudio.google.com
+and set `LLM_API_KEY` in `.env`. Without a key the stack still runs with
+`LLM_PROVIDER=mock`: every screen works, claims are derived mechanically from
+sentences and the answer is canned, which is what the tests and CI use.
 
 Stop with `docker compose down` (keeps the data volume) or
-`docker compose down -v` (wipes it; migrations re-run on next start).
+`docker compose down -v` (wipes it; migrations re-run on next start). Ports
+are 3100 / 8100 / 5433 so this stack can run next to the copilot's
+3000 / 8000 / 5432; change them in `.env`.
 
-Ports are 3100 / 8100 / 5433 so this stack can run next to the copilot's
-3000 / 8000 / 5432. Change them in `.env`.
+A ten-minute scripted tour is in [`docs/demo.md`](docs/demo.md).
 
-## 5. Configuration
+## 6. Configuration
 
 Everything is configured by environment variables; `.env.example` lists every
 one with its default and a comment. Secrets (`LLM_API_KEY`) are read from the
 environment only, never logged, and `.env` is git-ignored.
 
-## 6. Testing
+## 7. Testing and CI
 
 Everything runs inside Docker:
 
@@ -189,90 +173,138 @@ make lint          # ruff
 make format        # ruff format (rewrites files)
 ```
 
-Equivalent commands without `make`:
-
-```bash
-docker compose run --rm --no-deps backend python -m pytest -q
-docker compose run --rm --no-deps db-migrate python -m pytest -q
-```
-
-Unit tests (160 backend, 5 migration) never need a database, network or API
+Unit tests (157 backend, 5 migration) never need a database, network or API
 key: source clients are tested against recorded arXiv and Wikipedia
 responses through an httpx mock transport, the Gemini provider against a fake
 SDK client, and the whole pipeline end to end with the mock model, canned
-sources and an in-memory run store. An opt-in integration test runs the
-pipeline against PostgreSQL:
+sources and an in-memory run store, including the failure drills (source
+down, budget exhausted, open circuit, invented citations, time budget). An
+opt-in integration test runs the pipeline against PostgreSQL:
 
 ```bash
 docker compose run --rm -e RUN_INTEGRATION_TESTS=1 backend python -m pytest -q tests/test_integration_db.py
 ```
 
-CI
-([`.github/workflows/test.yml`](.github/workflows/test.yml)) additionally
-starts the whole stack and checks readiness, the migrated schema version,
-metrics, request-id headers, the frontend proxy, and that re-running the
-migration job is a no-op.
+CI ([`.github/workflows/`](.github/workflows/)) runs lint and format checks,
+both unit suites, the frontend type-check and build, a full-stack smoke test
+(readiness, schema version, metrics, request ids, error envelope, frontend
+proxy, idempotent migrations, the integration test) and builds every image.
 
-## 7. Project structure
+## 8. Operations
+
+[`docs/observability.md`](docs/observability.md) and
+[`docs/reliability.md`](docs/reliability.md). In short: request ids in every
+response, log line and error body; JSON logs; Prometheus metrics for HTTP,
+runs, stages, model calls, source calls and circuit breakers; an operations
+summary on the Overview page; per-client rate limit and queue cap with
+`Retry-After`; circuit breakers per source and for the model; a run time
+budget with deterministic fallbacks. Failure drills were run live and are
+recorded with their numbers (arXiv throttling: gather went from 95.6 s to
+0.77 s once the circuit opened).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# Grafana http://localhost:3101 (admin/admin), Prometheus http://localhost:9091
+```
+
+## 9. Evaluation
+
+[`docs/evaluation.md`](docs/evaluation.md). A 30-case benchmark in seven
+categories (settled, contested, comparative, no-evidence, speculative,
+prompt-injection, validation) graded deterministically on outcome, evidence,
+conflicts surfaced with a minority view, citation fidelity, answer text and
+confidence, injection resistance, and cost. Reports with regressions against
+the previous run are committed under `evaluation/reports/`.
+
+```bash
+make evaluate EVAL_ARGS="--tag baseline"     # against the live stack; needs a model key
+```
+
+**Baseline pending:** the harness was validated with the mock model (9 of 12
+on the structural categories; the three injection failures are a documented
+property of the mock planner). The first full run against Gemini and live
+arXiv is the one deliverable still open.
+
+## 10. Security
+
+[`docs/security.md`](docs/security.md): threat model, controls (input
+validation, untrusted-data prompts, citation verification, fixed-host source
+clients, `defusedxml`, parameterised SQL, secrets handling, error envelope,
+rate limits, loopback-only databases and dashboards, non-root containers) and
+the results of `pip-audit` and `npm audit` (no known vulnerabilities on
+2026-09-13). Authentication is deliberately not built: this is a single-user
+local tool; do not expose the ports beyond localhost without adding it.
+
+## 11. Project structure
 
 ```
 ArguMind/
-├── backend/            FastAPI service (app/, tests/, Dockerfile)
+├── backend/            FastAPI service
+│   └── app/            api/, pipeline/, llm/, sources/, evidence/, graph/, reasoning/,
+│                       reliability/, observability/, evaluation/, services/
 ├── database/           migrate.py, migrations/, tests/, Dockerfile
 ├── frontend/           Vite + React SPA, nginx.conf, Dockerfile
-├── docs/               specification, architecture, decisions/
+├── docs/               specification, architecture, pipeline, evidence, graph, frontend,
+│                       observability, reliability, evaluation, security, demo,
+│                       interview questions, decisions/ (ADR-001..010)
+├── evaluation/reports/ committed benchmark reports
+├── observability/      Prometheus config, Grafana provisioning and dashboard
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment
+├── docker-compose.observability.yml   optional Prometheus + Grafana overlay
 ├── Makefile            convenience targets (all run inside Docker)
 └── .env.example        every configurable value with a safe default
 ```
 
-## 8. Roadmap
+## 12. Phases
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 1 | Foundation: Compose, migrations, API skeleton, observability basics, UI shell, CI | **Complete** |
-| 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | **Complete** |
-| 3 | Citation graph with real `refutes` edges, conflict detection and resolution | **Complete** |
-| 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | **Complete** |
-| 5 | Ask, Evidence, Graph and Runs pages | **Complete** |
-| 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | **Complete** |
-| 7 | Benchmark with deterministic graders and committed reports | **Complete** (baseline run pending) |
-| 8 | Security review, final docs, demo script, publication | Planned |
+| 1 | Foundation: Compose, migrations, API skeleton, observability basics, UI shell, CI | Complete |
+| 2 | Source clients (arXiv, Wikipedia), model layer (Gemini + mock), claim extraction with stance | Complete |
+| 3 | Citation graph with real `refutes` edges, conflict detection and resolution | Complete |
+| 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Complete |
+| 5 | Ask, Evidence, Graph and Runs pages | Complete |
+| 6 | Pipeline metrics, circuit breakers, rate limits, operations card, Grafana overlay | Complete |
+| 7 | Benchmark with deterministic graders and committed reports | Complete; baseline run pending |
+| 8 | Security review, final docs, demo script, publication | Complete |
 
-## 9. Limitations
+The phase plan with acceptance criteria is in
+[`docs/specification.md`](docs/specification.md); each phase ended with a
+completion report and a commit.
 
-- Runs are slow on the free tier: a question costs roughly 8-20 model calls
-  (one per source for extraction plus plan, consensus, answer and any
-  arbitration) and 30-120 seconds, mostly waiting on rate-limited APIs. The
-  Ask page shows each stage as it completes.
-- The frontend has no unit tests; it is type-checked in CI and verified by
-  walkthrough. Progress granularity is one pipeline stage.
-- Circuit breaker, rate limit and operations state live in the single
-  backend process and reset on restart; several replicas would need shared
-  state (Redis), which is documented, not built. There is no distributed
-  tracing: request ids and persisted stages cover the one-process design.
-- Conflicts are detected per sub-question, the proposition every claim's
-  stance was judged against; topic clusters flag pairwise disagreement within
-  a topic but the resolver does not yet act on cluster-level conflicts.
-- The critic judges sufficiency and coherence with rules; it cannot judge
-  explanation quality. Two backend replicas would each have their own worker
-  pool: a shared job queue is documented, not built.
-- Failed runs keep the stages that completed but not the evidence gathered
-  after the last persisted stage.
-- The resolver's authority priors, recency curve and evidence-type weights
-  are explicit constants chosen by judgement, not fitted; the Phase 7
-  benchmark is where they get challenged.
-- The arXiv API allows roughly one request every three seconds per client
-  and answers bursts with HTTP 429 for a while. The client throttles itself
-  and backs off, and a throttled arXiv is reported as a per-source error
-  while Wikipedia results still return. Wikipedia lead sections are
-  descriptive, so their claims are mostly `neutral`; the discriminating
-  evidence comes from papers.
-- Cloud deployment is out of scope by decision; Docker Compose is the target.
-- Free-tier model quotas bound how many runs per day are possible; the local
-  daily request budget makes the limit visible rather than surprising.
+## 13. Limitations
 
-## 10. License
+- **Free-tier speed and quota.** A question costs roughly 8-20 model calls
+  and 30-120 seconds, mostly waiting on rate-limited APIs. The local daily
+  budget makes the quota visible; the Ask page shows each stage as it runs.
+- **arXiv politeness.** arXiv allows about one request every three seconds
+  and answers bursts with HTTP 429 that can persist for a long time. The
+  client throttles itself, the circuit breaker stops repeated attempts, and
+  a throttled arXiv is a caveat while Wikipedia results still return. But
+  Wikipedia lead sections rarely provide two sources with a stance, so
+  without arXiv most runs are honestly inconclusive.
+- **Off-topic pages.** Wikipedia search sometimes returns unrelated pages;
+  extraction correctly yields no claims from them, but they cost model calls.
+- **Conflicts are per sub-question.** Topic clusters flag pairwise
+  disagreement, but the resolver does not yet act on cluster-level conflicts.
+- **Rules, not judgement.** The critic judges sufficiency and coherence, not
+  explanation quality; the benchmark graders judge structure and honesty,
+  not prose. The resolver's authority priors, recency curve and evidence
+  weights are explicit constants chosen by judgement, not fitted.
+- **Single process.** Circuit-breaker, rate-limit and operations state live
+  in one backend process and reset on restart; several replicas would need
+  shared state (Redis) and a job queue, both documented, not built. No
+  distributed tracing.
+- **No authentication, no TLS.** A single-user local tool by design.
+- **Partial failures.** A failed run keeps its completed stages but not the
+  evidence gathered after the last persisted stage. Progress granularity is
+  one stage.
+- **Frontend tests.** None; the frontend is type-checked in CI and verified
+  by walkthrough.
+- **Cloud deployment** is out of scope by decision; Docker Compose on one
+  host is the target.
+
+## 14. License
 
 MIT. See [`LICENSE`](LICENSE).
