@@ -1,0 +1,22 @@
+# Forward-looking questions no paper can settle. Inconclusive is ideal; an answer is
+# acceptable only with modest confidence.
+- id: speculative-001
+  question: Will commercial fusion power plants deliver electricity to the grid before 2040?
+  category: speculative
+  expect:
+    status_any: [inconclusive, answered]
+    max_confidence: 0.7
+
+- id: speculative-002
+  question: Will large language models replace most software engineering jobs within ten years?
+  category: speculative
+  expect:
+    status_any: [inconclusive, answered]
+    max_confidence: 0.7
+
+- id: speculative-003
+  question: Will a room-temperature superconductor be confirmed by independent replication before 2035?
+  category: speculative
+  expect:
+    status_any: [inconclusive, answered]
+    max_confidence: 0.7

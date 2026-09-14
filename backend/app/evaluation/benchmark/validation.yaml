@@ -1,0 +1,24 @@
+# Input validation: rejected before any source or model call.
+- id: validation-001
+  question: short
+  category: validation
+  notes: below the 10-character minimum
+  expect:
+    http_status: 422
+    max_llm_calls: 0
+
+- id: validation-002
+  question: "Does dropout reduce overfitting in neural networks? padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding"
+  category: validation
+  notes: above the 500-character maximum
+  expect:
+    http_status: 422
+    max_llm_calls: 0
+
+- id: validation-003
+  question: "          "
+  category: validation
+  notes: whitespace only; rejected by length after the API strips nothing (the model never sees it)
+  expect:
+    http_status: 422
+    max_llm_calls: 0

@@ -13,9 +13,16 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: Phase 6 (Observability and reliability) complete.** The system
+> **Status: Phase 7 (Evaluation) complete; baseline run pending.** The system
 > answers questions end to end, in the browser and through the API, and it is
-> now **observable and self-protecting**: metrics for runs, stages, model
+> **measured**: a 30-case **benchmark** (settled, contested, comparative,
+> no-evidence, speculative, prompt-injection and validation questions) is
+> graded deterministically on outcome, evidence, conflicts surfaced, citation
+> fidelity, answer, safety and cost, with committed reports and regression
+> comparison (`make evaluate`). The first full run against the real model
+> awaits arXiv's rate limit lifting and a model key in `.env`; see
+> [`docs/evaluation.md`](docs/evaluation.md). It is also
+> **observable and self-protecting**: metrics for runs, stages, model
 > calls, source calls and circuit breakers on `/metrics`, an operations
 > summary on the Overview page, a request id in every log line and error
 > response, an optional Prometheus and Grafana overlay, **circuit breakers**
@@ -98,7 +105,12 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 # Grafana http://localhost:3101 (admin/admin), Prometheus http://localhost:9091
 ```
 
-**Planned:** the benchmark (Phase 7), final review and publication (Phase 8).
+Evaluation: [`docs/evaluation.md`](docs/evaluation.md). Run the benchmark
+against the live stack with `make evaluate EVAL_ARGS="--tag baseline"`;
+reports land in `evaluation/reports/`.
+
+**Planned:** the baseline benchmark report, then final review and publication
+(Phase 8).
 
 ## 2. Architecture
 
@@ -184,7 +196,7 @@ docker compose run --rm --no-deps backend python -m pytest -q
 docker compose run --rm --no-deps db-migrate python -m pytest -q
 ```
 
-Unit tests (130 backend, 5 migration) never need a database, network or API
+Unit tests (160 backend, 5 migration) never need a database, network or API
 key: source clients are tested against recorded arXiv and Wikipedia
 responses through an httpx mock transport, the Gemini provider against a fake
 SDK client, and the whole pipeline end to end with the mock model, canned
@@ -225,7 +237,7 @@ ArguMind/
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | **Complete** |
 | 5 | Ask, Evidence, Graph and Runs pages | **Complete** |
 | 6 | Pipeline metrics, retries, circuit breakers, run deadline, rate limits | **Complete** |
-| 7 | Benchmark with deterministic graders and committed reports | Planned |
+| 7 | Benchmark with deterministic graders and committed reports | **Complete** (baseline run pending) |
 | 8 | Security review, final docs, demo script, publication | Planned |
 
 ## 9. Limitations

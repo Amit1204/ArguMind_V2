@@ -35,6 +35,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
 # The migration job and the evidence check are CLIs; their output is intentional.
 "database/migrate.py" = ["T201"]
 "**/evidence/cli.py" = ["T201"]
+"**/evaluation/run.py" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "database/tests"]

@@ -1,0 +1,62 @@
+# Questions the literature genuinely disagrees about. The system must surface both
+# stances and resolve at least one conflict while keeping the minority view.
+- id: contested-001
+  question: Do large language models understand language?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+    conflict_expected: true
+
+- id: contested-002
+  question: Are the emergent abilities of large language models a mirage caused by the choice of metric?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+    conflict_expected: true
+
+- id: contested-003
+  question: Does chain-of-thought prompting reflect genuine reasoning in language models?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+    conflict_expected: true
+
+- id: contested-004
+  question: Do neural networks generalise compositionally?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+    conflict_expected: true
+
+- id: contested-005
+  question: Is modified Newtonian dynamics a viable alternative to dark matter for explaining galaxy rotation curves?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+    conflict_expected: true
+
+- id: contested-006
+  question: Is scaling model size sufficient to reach human-level artificial general intelligence?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_all: [supports, refutes]
+
+- id: contested-007
+  question: Do self-driving cars reduce traffic accidents compared with human drivers?
+  category: contested
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_any: [supports, refutes]

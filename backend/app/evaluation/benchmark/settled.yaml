@@ -1,0 +1,56 @@
+# Questions with a broad, well-documented consensus in the literature. The run should
+# answer, cite retrieved sources, and find supporting evidence.
+- id: settled-001
+  question: Does dropout reduce overfitting in neural networks?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    min_claims: 2
+    stances_any: [supports]
+    answer_contains_any: [dropout, overfit]
+
+- id: settled-002
+  question: Do transformer models outperform recurrent neural networks on machine translation?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    stances_any: [supports]
+    answer_contains_any: [transformer, attention]
+
+- id: settled-003
+  question: Does batch normalization speed up the training of deep networks?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    stances_any: [supports]
+    answer_contains_any: [normalization, batch]
+
+- id: settled-004
+  question: Is the expansion of the universe accelerating?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    stances_any: [supports]
+    answer_contains_any: [accelerat, dark energy, supernova]
+
+- id: settled-005
+  question: Does Shor's algorithm factor integers faster than the best known classical algorithms?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    stances_any: [supports]
+    answer_contains_any: [Shor, factor, quantum]
+
+- id: settled-006
+  question: Does pretraining on large text corpora improve downstream natural language understanding?
+  category: settled
+  expect:
+    status_any: [answered]
+    min_sources: 2
+    stances_any: [supports]
+    answer_contains_any: [pretrain, transfer, fine-tun, downstream]

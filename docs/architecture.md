@@ -40,7 +40,8 @@ flowchart TD
 | Run persistence (runs, stages as they complete, sources, claims, edges) with memory and PostgreSQL stores; runs API (`POST /runs`, list, detail, graph) on a bounded worker pool | **Implemented** (Phase 4) | `backend/app/pipeline/store.py`, `backend/app/api/runs.py` |
 | Observability: run, stage, model, source and breaker metrics on `/metrics`; operations summary endpoint and Overview card; request id in every error; optional Prometheus + Grafana overlay with a provisioned dashboard | **Implemented** (Phase 6) | `backend/app/observability/`, `docker-compose.observability.yml`, `docs/observability.md` |
 | Reliability: circuit breakers per source and for the model, per-client rate limit and queue cap with `Retry-After`, plus the earlier retries, throttle, budget, time budget and deterministic fallbacks; documented failure drills | **Implemented** (Phase 6) | `backend/app/reliability/`, `docs/reliability.md`, ADR-009 |
-| Benchmark with deterministic graders and committed reports | Designed (Phase 7) | `backend/app/evaluation/`, `evaluation/reports/` |
+| Benchmark: 30 YAML cases in 7 categories, deterministic graders over run detail (outcome, evidence, conflicts, citation fidelity, answer, safety, cost), runner with transient retry and resume, Markdown + JSON reports with regressions; `make evaluate` | **Implemented** (Phase 7) | `backend/app/evaluation/`, `docs/evaluation.md`, ADR-010 |
+| Baseline report against the real model and live sources | Pending: blocked by arXiv rate limiting on the build day and no model key in `.env`; procedure in `docs/evaluation.md` §4 | `evaluation/reports/` |
 | Security review, final docs, publication | Designed (Phase 8) | — |
 
 ## Runtime view (Phase 1)
@@ -102,6 +103,7 @@ ArguMind/
 ├── docs/               specification, architecture, evidence, graph, pipeline, frontend,
 │                       observability, reliability, ADRs
 ├── observability/      Prometheus config, Grafana provisioning and dashboard
+├── evaluation/reports/ committed benchmark reports (latest.md / latest.json)
 ├── docker-compose.observability.yml   optional Prometheus + Grafana overlay
 ├── .github/workflows/  test.yml, build.yml
 ├── docker-compose.yml  canonical local environment

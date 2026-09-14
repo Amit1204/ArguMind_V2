@@ -377,7 +377,7 @@ def _inconclusive_answer(state: RunState, critic: dict, consensus: dict) -> str:
         f"{consensus.get('overall', '')}".strip()
     )
     if gaps:
-        text += " Open questions: " + "; ".join(gaps[:3]) + "."
+        text += " Open questions: " + "; ".join(g.rstrip(". ") for g in gaps[:3]) + "."
     return text
 
 

@@ -1,0 +1,16 @@
+# Comparisons between two approaches: evidence should exist for both sides.
+- id: comparative-001
+  question: Are convolutional networks better than vision transformers for image classification on small datasets?
+  category: comparative
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_any: [supports, refutes]
+
+- id: comparative-002
+  question: Is reinforcement learning from human feedback more effective than supervised fine-tuning for aligning language models?
+  category: comparative
+  expect:
+    status_any: [answered, inconclusive]
+    min_sources: 2
+    stances_any: [supports, refutes]

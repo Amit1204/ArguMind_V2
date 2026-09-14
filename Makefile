@@ -37,6 +37,12 @@ test-backend: ## Backend unit tests (docker compose run --rm --no-deps backend p
 test-db: ## Migration job tests
 	$(COMPOSE) run --rm --no-deps db-migrate python -m pytest -q -p no:cacheprovider
 
+evaluate: ## Run the benchmark against the live stack (writes evaluation/reports); EVAL_ARGS="--tag baseline"
+	$(COMPOSE) run --rm --no-deps -v "$(PWD)/evaluation:/app/evaluation_out" backend python -m app.evaluation.run --base-url http://backend:8000 --out /app/evaluation_out/reports $(EVAL_ARGS)
+
+evaluate-smoke: ## A few benchmark cases to check the harness (report not kept as latest)
+	$(MAKE) evaluate EVAL_ARGS="--limit 4 --tag smoke --pause 0"
+
 lint: ## Ruff lint for all Python code
 	$(COMPOSE) run --rm --no-deps backend ruff check app tests
 	$(COMPOSE) run --rm --no-deps db-migrate ruff check migrate.py tests

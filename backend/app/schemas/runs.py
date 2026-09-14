@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.evidence.models import Claim
 from app.pipeline.schemas import RunStatus, RunUsage, StageRecord
@@ -14,6 +14,14 @@ from app.sources.models import Source
 class RunCreate(BaseModel):
     question: str = Field(min_length=10, max_length=500)
     client_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("question")
+    @classmethod
+    def _meaningful(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 10:
+            raise ValueError("question must contain at least 10 non-blank characters")
+        return cleaned
 
 
 class RunSummary(BaseModel):
