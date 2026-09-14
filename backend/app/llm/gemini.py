@@ -300,9 +300,7 @@ class GeminiProvider(LLMProvider):
                     now = self._clock()
             self._last_request_at = now
 
-    def _backoff(
-        self, attempt: int, model: str, reason: str, hint: float | None = None
-    ) -> None:
+    def _backoff(self, attempt: int, model: str, reason: str, hint: float | None = None) -> None:
         if hint is not None and hint > 0:
             delay = min(hint + 0.5, RATE_LIMIT_HINT_CAP_SECONDS)
             reason = f"{reason} (provider asks for {hint:.0f}s)"

@@ -22,7 +22,7 @@ ModelCircuit = Callable[[], float]
 DEGRADED_STATUSES = frozenset({"inconclusive", "failed"})
 
 
-class ProviderExhausted(RuntimeError):
+class ProviderExhaustedError(RuntimeError):
     """The model provider rejected every call of a case even after the circuit
     rerun (typically a spent daily quota). Grading further cases would measure
     the quota, not the pipeline; the run stops and the checkpoint stays resumable."""
@@ -125,6 +125,13 @@ class EvaluationRunner:
         return http_status, body, retry_after, latency_ms, retried
 
     @staticmethod
+    def _run_from(http_status: int, body: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The run detail when the API answered with one, else None (error envelope)."""
+        if http_status == 200 and isinstance(body, dict) and "status" in body:
+            return body
+        return None
+
+    @staticmethod
     def _looks_degraded(run: dict[str, Any] | None) -> bool:
         """A run that ended inconclusive/failed without a single successful model
         call was starved by the model circuit breaker, not judged on evidence."""
@@ -135,7 +142,7 @@ class EvaluationRunner:
     def run_case(self, case: Case) -> CaseResult:
         circuit_wait = self._wait_for_model_circuit(case.id)
         http_status, body, retry_after, latency_ms, retried = self._ask_once(case)
-        run = body if (http_status == 200 and isinstance(body, dict) and "status" in body) else None
+        run = self._run_from(http_status, body)
         retried_circuit = False
         # The case ran while the provider was unavailable: the outcome says nothing
         # about the pipeline. Wait for the circuit to close and run it once more.
@@ -150,11 +157,9 @@ class EvaluationRunner:
             http_status, body, retry_after, latency_ms, retried2 = self._ask_once(case)
             retried = retried or retried2
             retried_circuit = True
-            run = (
-                body if (http_status == 200 and isinstance(body, dict) and "status" in body) else None
-            )
+            run = self._run_from(http_status, body)
             if self._looks_degraded(run):
-                raise ProviderExhausted(case.id)
+                raise ProviderExhaustedError(case.id)
         if run is not None and run.get("latency_ms") is not None:
             latency_ms = int(run["latency_ms"])
         dimensions = grade_case(case, http_status, run, latency_ms)
@@ -201,7 +206,7 @@ class EvaluationRunner:
         for index, case in enumerate(cases):
             try:
                 result = self.run_case(case)
-            except ProviderExhausted as exc:
+            except ProviderExhaustedError as exc:
                 self.aborted_at = exc.case_id
                 log.error(
                     "%s; stopping after %d graded case(s). The model provider is exhausted "
