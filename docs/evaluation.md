@@ -48,7 +48,37 @@ make evaluate EVAL_ARGS="--tag baseline --resume"  # continue after an interrupt
 Each case is one `POST /api/v1/runs?wait=true` with client id
 `bench:<tag>:<case>`, so the per-client rate limit never triggers. `429`,
 `502` and `503` are retried once after `Retry-After`. A checkpoint
-(`partial.json`, git-ignored) is written after every case. Reports land in
+(`partial.json`, git-ignored) is written after every case.
+
+**Circuit pacing.** The runner reads `/api/v1/system/operations` before every
+case and, if an `llm:*` circuit breaker is open, waits `retry_after + 2 s`
+(capped at 10 min) instead of starting. After each case it checks again and,
+if the circuit is open or the run ended `inconclusive`/`failed` with **zero**
+successful model calls, waits the circuit out and reruns the case once
+(`extra.retried_circuit`, `extra.circuit_wait_seconds` in the JSON report).
+This was added after the first live attempt: a canary run plus the first
+case tripped Gemini's per-minute quota, the backend's `llm:gemini` breaker
+opened for 120 s, and the next six cases each ended inconclusive in 4-34 s
+with no model call. Those are harness-induced failures, not pipeline
+failures, and grading them would have made the baseline meaningless.
+`--no-circuit-pacing` disables the behaviour; `--pause 15` is the gentle
+default used for the baseline.
+
+If a case is still starved after the rerun, the provider is exhausted (a spent
+daily quota, in practice): the runner stops **without grading that case or
+writing a report**, exits with code 3 and leaves `partial.json` for
+`--resume`.
+
+**Free-tier facts learned while getting the baseline to run** (each became a
+control in `docs/reliability.md`): the fast model allows 15 requests/min and
+its 429 asks for a 40-60 s retry, so the provider now paces requests to one
+per 4 s and honours the hint (capped at 30 s). Daily caps per model are
+**20 requests for the standard model and 500 for the fast model**; the
+provider detects a per-day quota in the 429 body and parks the model for an
+hour instead of retrying, so synthesis calls fall back to the fast tier after
+the first few cases. A case costs 13-30 fast-tier calls, so **one free-tier
+day covers roughly 15-20 cases**; the full baseline is collected over two
+days with `--resume`, and the report records that. Reports land in
 `evaluation/reports/<tag>.md` and `.json`; non-smoke tags also update
 `latest.*`, and the Markdown lists regressions and fixes versus the previous
 latest.

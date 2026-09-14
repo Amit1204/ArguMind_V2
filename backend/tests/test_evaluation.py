@@ -265,6 +265,91 @@ def test_runner_retries_transient_statuses_once_and_grades(tmp_path: Path) -> No
     assert "Regressions" in rendered and "## Failures (1)" in rendered
 
 
+def test_runner_waits_for_open_model_circuit_and_reruns_starved_cases() -> None:
+    """On the free tier a burst trips the provider quota and the backend opens its
+    model circuit; cases run meanwhile end inconclusive with 0 model calls. The
+    runner must wait the circuit out and rerun such a case instead of grading it."""
+    circuit = {"retry_after": [45.0, 0.0, 30.0, 0.0]}  # consumed one per probe
+
+    def model_circuit() -> float:
+        return circuit["retry_after"].pop(0) if circuit["retry_after"] else 0.0
+
+    starved = answered_run(
+        status="inconclusive",
+        confidence=0.0,
+        answer="The evidence is inconclusive.",
+        claims=[],
+        usage={"llm_calls": 0, "input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0},
+    )
+    answers = iter([(200, starved, None), (200, answered_run(), None)])
+    asked: list[str] = []
+
+    def ask(case: Case):  # noqa: ANN202
+        asked.append(case.id)
+        return next(answers)
+
+    slept: list[float] = []
+    case = Case(id="settled-001", category="settled", question="Does dropout reduce overfitting?",
+                expect=Expectation(min_sources=2, answer_contains_any=["dropout"]))  # fmt: skip
+    runner = EvaluationRunner(ask, sleep=slept.append, model_circuit=model_circuit)
+    result = runner.run([case])[0]
+
+    # probe 1: open 45 s -> waited 47 s; probe 2: closed -> ask (starved run, 0 model
+    # calls, so no post-check probe is needed); probe 3: open 30 s -> waited 32 s;
+    # probe 4: closed -> ask again (answered); post-check probe: list empty -> closed.
+    assert asked == ["settled-001", "settled-001"]
+    assert slept == [47.0, 32.0]
+    assert result.passed and result.status == "answered"
+    assert result.extra["retried_circuit"] is True
+    assert result.extra["circuit_wait_seconds"] == 79.0
+    assert result.extra["retried_transient"] is False
+
+    # a genuine inconclusive (the planner ran, evidence was thin) is graded, not rerun
+    genuine = answered_run(status="inconclusive", confidence=0.1, claims=[])
+    plain = EvaluationRunner(lambda c: (200, genuine, None), model_circuit=lambda: 0.0)
+    graded = plain.run([case])[0]
+    assert graded.extra["retried_circuit"] is False and graded.status == "inconclusive"
+
+    # a probe failure never blocks the benchmark
+    def broken() -> float:
+        raise ConnectionError("operations endpoint down")
+
+    ok = EvaluationRunner(lambda c: (200, answered_run(), None), model_circuit=broken)
+    assert ok.run([case])[0].passed
+
+    # still starved after the rerun (daily quota spent): the case is not graded or
+    # checkpointed and the run stops, so the checkpoint can be resumed later
+    recorded: list[str] = []
+    exhausted = EvaluationRunner(
+        lambda c: (200, starved, None),
+        model_circuit=lambda: 0.0,
+        on_result=lambda r: recorded.append(r.id),
+    )
+    second = Case(id="settled-002", category="settled", question="q?", expect=Expectation())
+    results = exhausted.run([case, second])
+    assert results == [] and recorded == [] and exhausted.aborted_at == "settled-001"
+
+
+def test_model_circuit_probe_reads_open_llm_circuits_only() -> None:
+    import httpx as _httpx
+
+    from app.evaluation.run import make_model_circuit_probe
+
+    payload = {
+        "circuits": {
+            "llm:gemini": {"state": "open", "retry_after_seconds": 69.2},
+            "source:arxiv": {"state": "open", "retry_after_seconds": 500.0},
+            "source:wikipedia": {"state": "closed", "retry_after_seconds": 0.0},
+        }
+    }
+    transport = _httpx.MockTransport(lambda request: _httpx.Response(200, json=payload))
+    client = _httpx.Client(base_url="http://backend:8000", transport=transport)
+    probe = make_model_circuit_probe("http://backend:8000", client=client)
+    assert probe() == 69.2  # only llm:* circuits count; a throttled source is not a reason to wait
+    payload["circuits"]["llm:gemini"] = {"state": "half_open", "retry_after_seconds": 0.0}
+    assert probe() == 0.0
+
+
 def test_smoke_reports_do_not_replace_latest(tmp_path: Path) -> None:
     from app.evaluation.report import now
 

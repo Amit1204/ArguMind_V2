@@ -15,6 +15,21 @@ log = logging.getLogger(__name__)
 
 # ask(case) -> (http status, JSON body or None, retry-after seconds or None)
 Ask = Callable[[Case], tuple[int, dict[str, Any] | None, float | None]]
+# model_circuit() -> seconds until the backend's model circuit breaker may close
+# (0.0 when it is closed / half-open and calls are allowed through)
+ModelCircuit = Callable[[], float]
+
+DEGRADED_STATUSES = frozenset({"inconclusive", "failed"})
+
+
+class ProviderExhausted(RuntimeError):
+    """The model provider rejected every call of a case even after the circuit
+    rerun (typically a spent daily quota). Grading further cases would measure
+    the quota, not the pipeline; the run stops and the checkpoint stays resumable."""
+
+    def __init__(self, case_id: str) -> None:
+        super().__init__(f"{case_id}: no successful model call even after the circuit rerun")
+        self.case_id = case_id
 
 
 @dataclass(slots=True)
@@ -53,6 +68,8 @@ class EvaluationRunner:
         transient_wait: float = 30.0,
         sleep: Callable[[float], None] = time.sleep,
         on_result: Callable[[CaseResult], None] | None = None,
+        model_circuit: ModelCircuit | None = None,
+        circuit_wait_cap: float = 600.0,
     ) -> None:
         self._ask = ask
         self._pause = pause_seconds
@@ -60,8 +77,38 @@ class EvaluationRunner:
         self._transient_wait = transient_wait
         self._sleep = sleep
         self._on_result = on_result
+        self._model_circuit = model_circuit
+        self._circuit_wait_cap = circuit_wait_cap
+        self.aborted_at: str | None = None  # case id that stopped the run, if any
 
-    def run_case(self, case: Case) -> CaseResult:
+    def _circuit_retry_after(self) -> float:
+        """Seconds until the model circuit allows calls; 0.0 if closed or unknown."""
+        if self._model_circuit is None:
+            return 0.0
+        try:
+            return max(0.0, float(self._model_circuit()))
+        except Exception as exc:  # noqa: BLE001 - a probe failure must not stop the run
+            log.warning("model circuit probe failed (%s); assuming closed", exc)
+            return 0.0
+
+    def _wait_for_model_circuit(self, case_id: str) -> float:
+        """Block while the backend's model circuit is open, so a case is not run
+        against a provider that is guaranteed to reject every call. Returns the
+        seconds waited (capped)."""
+        waited = 0.0
+        while waited < self._circuit_wait_cap:
+            retry_after = self._circuit_retry_after()
+            if retry_after <= 0:
+                break
+            wait = min(retry_after + 2.0, self._circuit_wait_cap - waited)
+            log.warning("%s: model circuit open; waiting %.0fs before the case", case_id, wait)
+            self._sleep(wait)
+            waited += wait
+        return waited
+
+    def _ask_once(self, case: Case) -> tuple[int, dict[str, Any] | None, float | None, int, bool]:
+        """One attempt with the transient-status retry. Returns
+        (http status, body, retry-after, latency ms, retried_transient)."""
         started = time.perf_counter()
         http_status, body, retry_after = self._ask(case)
         retried = False
@@ -75,7 +122,39 @@ class EvaluationRunner:
             http_status, body, retry_after = self._ask(case)
             retried = True
         latency_ms = int((time.perf_counter() - started) * 1000)
+        return http_status, body, retry_after, latency_ms, retried
+
+    @staticmethod
+    def _looks_degraded(run: dict[str, Any] | None) -> bool:
+        """A run that ended inconclusive/failed without a single successful model
+        call was starved by the model circuit breaker, not judged on evidence."""
+        if run is None or run.get("status") not in DEGRADED_STATUSES:
+            return False
+        return int((run.get("usage") or {}).get("llm_calls", 0)) == 0
+
+    def run_case(self, case: Case) -> CaseResult:
+        circuit_wait = self._wait_for_model_circuit(case.id)
+        http_status, body, retry_after, latency_ms, retried = self._ask_once(case)
         run = body if (http_status == 200 and isinstance(body, dict) and "status" in body) else None
+        retried_circuit = False
+        # The case ran while the provider was unavailable: the outcome says nothing
+        # about the pipeline. Wait for the circuit to close and run it once more.
+        if run is not None and (self._looks_degraded(run) or self._circuit_retry_after() > 0):
+            log.warning(
+                "%s: run %s with %s model calls while the model circuit was open; rerunning once",
+                case.id,
+                run.get("status"),
+                (run.get("usage") or {}).get("llm_calls", 0),
+            )
+            circuit_wait += self._wait_for_model_circuit(case.id)
+            http_status, body, retry_after, latency_ms, retried2 = self._ask_once(case)
+            retried = retried or retried2
+            retried_circuit = True
+            run = (
+                body if (http_status == 200 and isinstance(body, dict) and "status" in body) else None
+            )
+            if self._looks_degraded(run):
+                raise ProviderExhausted(case.id)
         if run is not None and run.get("latency_ms") is not None:
             latency_ms = int(run["latency_ms"])
         dimensions = grade_case(case, http_status, run, latency_ms)
@@ -102,6 +181,8 @@ class EvaluationRunner:
             answer=((run or {}).get("answer") or "")[:600] or None,
             extra={
                 "retried_transient": retried,
+                "retried_circuit": retried_circuit,
+                "circuit_wait_seconds": round(circuit_wait, 1),
                 "sub_questions": (run or {}).get("sub_questions", []),
                 "critic": ((run or {}).get("critic") or {}).get("issues", []),
                 "error_detail": None
@@ -118,7 +199,17 @@ class EvaluationRunner:
     def run(self, cases: list[Case]) -> list[CaseResult]:
         results: list[CaseResult] = []
         for index, case in enumerate(cases):
-            result = self.run_case(case)
+            try:
+                result = self.run_case(case)
+            except ProviderExhausted as exc:
+                self.aborted_at = exc.case_id
+                log.error(
+                    "%s; stopping after %d graded case(s). The model provider is exhausted "
+                    "(daily quota?) - resume later with --resume.",
+                    exc,
+                    len(results),
+                )
+                break
             results.append(result)
             mark = "PASS" if result.passed else "FAIL"
             failed = [d["name"] for d in result.dimensions if d["status"] == FAIL]

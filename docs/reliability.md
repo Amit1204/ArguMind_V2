@@ -17,8 +17,10 @@ How the system behaves when its dependencies misbehave. Everything listed is
 | Sources | politeness throttle | `ARXIV_MIN_INTERVAL_SECONDS` (3), `ARXIV_TIMEOUT_SECONDS` (30) | one arXiv request per 3 s, 5 s floor after a 429 |
 | Sources | circuit breaker per kind | `CIRCUIT_FAILURE_THRESHOLD` (3), `CIRCUIT_RECOVERY_SECONDS` (120) | open circuit → instant per-source error, one probe after recovery |
 | Sources | lookup cache | `SOURCE_CACHE_TTL_HOURS` (24) | identical searches never leave the database |
-| Model | retries with jittered backoff | `LLM_MAX_RETRIES` (2) | 429, 5xx and timeouts |
+| Model | request pacing | `LLM_MIN_INTERVAL_SECONDS` (4) | one provider request per 4 s process-wide (15/min, the free tier's per-model limit), shared by concurrent runs; added after the first live benchmark tripped the quota and opened the model circuit on every case |
+| Model | retries with jittered backoff | `LLM_MAX_RETRIES` (2) | 429, 5xx and timeouts; a 429's "retry in Ns" hint is honoured, capped at 30 s so one call cannot eat the run budget |
 | Model | tier fallback | — | standard → fast when a model stays unavailable |
+| Model | daily-quota parking | — | a 429 whose body names a per-day quota (`...PerDay...` in `QuotaFailure`) is not retried: the model is parked for 60 min and the tier fallback applies at once. Found live: the free tier allows **20 requests/day** for the standard model, and its 429 still says "retry in 6 s" |
 | Model | daily request budget | `LLM_DAILY_REQUEST_LIMIT` (1000) | refused locally before the provider's quota is hit |
 | Model | circuit breaker | same thresholds | open circuit → calls fail fast as unavailable |
 | Model | schema/thinking degradation | — | retry without response schema or thinking config when a model rejects them |

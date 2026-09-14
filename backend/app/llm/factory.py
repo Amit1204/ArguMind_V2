@@ -45,6 +45,7 @@ def build_provider(settings: Settings, instrument: bool = True) -> LLMProvider:
             max_retries=settings.llm_max_retries,
             price_table=PriceTable.from_json(settings.llm_price_table_json),
             thinking_level=settings.llm_thinking_level,
+            min_interval_seconds=settings.llm_min_interval_seconds,
         )
     else:
         raise LLMConfigurationError(f"unknown LLM provider: {settings.llm_provider}")

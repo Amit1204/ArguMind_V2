@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     llm_model_standard: str = "gemini-3-flash-preview"
     llm_timeout_seconds: int = Field(default=45, ge=5, le=300)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
+    # Minimum spacing between provider requests, process-wide. Gemini's free tier
+    # allows 15 requests/min per model ("generate_content_free_tier_requests,
+    # limit: 15" in its 429 body) and one run's extraction loop alone exceeds that
+    # at full speed; 4 s keeps the client at the limit. 0 disables pacing (paid).
+    llm_min_interval_seconds: float = Field(default=4.0, ge=0, le=30)
     # Gemini 3 thinking depth for the standard tier (low | medium | high); blank disables.
     llm_thinking_level: str = Field(default="low", pattern="^(|low|medium|high)$")
     # Local guard so a runaway loop cannot exhaust the provider's daily quota.

@@ -44,6 +44,29 @@ def make_ask(base_url: str, tag: str, timeout: float) -> Any:
     return ask
 
 
+def make_model_circuit_probe(
+    base_url: str, timeout: float = 10.0, client: httpx.Client | None = None
+) -> Any:
+    """Read the backend's operations summary and report how long the model
+    circuit breaker(s) stay open. On the free tier a burst of cases can trip the
+    provider's per-minute quota; running cases while the circuit is open would
+    grade harness-induced failures as pipeline failures."""
+    client = client or httpx.Client(base_url=base_url, timeout=timeout)
+
+    def probe() -> float:
+        response = client.get("/api/v1/system/operations")
+        response.raise_for_status()
+        circuits = response.json().get("circuits") or {}
+        waits = [
+            float(state.get("retry_after_seconds") or 0.0)
+            for name, state in circuits.items()
+            if name.startswith("llm:") and state.get("state") == "open"
+        ]
+        return max(waits, default=0.0)
+
+    return probe
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ArguMind benchmark")
     parser.add_argument("--base-url", default="http://backend:8000")
@@ -55,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pause", type=float, default=2.0, help="seconds between cases")
     parser.add_argument("--timeout", type=float, default=400.0, help="HTTP timeout per case")
     parser.add_argument("--resume", action="store_true", help="skip cases in partial.json")
+    parser.add_argument(
+        "--no-circuit-pacing",
+        action="store_true",
+        help="do not wait for the backend's model circuit breaker between cases",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
@@ -96,8 +124,16 @@ def main(argv: list[str] | None = None) -> int:
         make_ask(args.base_url, args.tag, args.timeout),
         pause_seconds=args.pause,
         on_result=checkpoint,
+        model_circuit=None if args.no_circuit_pacing else make_model_circuit_probe(args.base_url),
     )
     runner.run(cases)
+    if runner.aborted_at:
+        print(
+            f"\nstopped at {runner.aborted_at}: the model provider rejected every call. "
+            f"{len(results)} result(s) kept in {partial_path}; rerun with --resume when the "
+            "quota is back. No report written."
+        )
+        return 3
     finished = now()
     results.sort(key=lambda r: r.id)
     md_path, json_path = write_reports(out, args.tag, started, finished, args.base_url, results)
