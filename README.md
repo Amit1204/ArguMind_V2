@@ -13,10 +13,12 @@ to the same standard as the
 [AI Business Analyst & Operations Copilot](https://github.com/Amit1204/AI-Analyst-Operations-Copilot):
 reproducible, tested, observable, honestly documented.
 
-> **Status: all eight phases complete.** One deliverable remains open: the
-> baseline benchmark report against the real model and live arXiv, which was
-> blocked by arXiv rate limiting on the build day ([how to run it](docs/evaluation.md#4-baseline)).
-> Everything below is **implemented** unless marked otherwise.
+> **Status: all eight phases complete, baseline recorded.** The 30-case
+> benchmark against Gemini and live arXiv/Wikipedia scores **25/30 (83.3 %)**,
+> with 100 % on injection resistance, validation, outcome and cost bounds;
+> the five failures are classified in [`docs/evaluation.md` §4](docs/evaluation.md#4-baseline)
+> (a stance-frame defect accounts for two of them). Everything below is
+> **implemented** unless marked otherwise.
 
 ---
 
@@ -217,13 +219,32 @@ confidence, injection resistance, and cost. Reports with regressions against
 the previous run are committed under `evaluation/reports/`.
 
 ```bash
-make evaluate EVAL_ARGS="--tag baseline"     # against the live stack; needs a model key
+make evaluate EVAL_ARGS="--tag baseline --pause 15"   # against the live stack; needs a model key
+make evaluate EVAL_ARGS="--tag baseline --pause 15 --resume"   # continue after the daily quota
 ```
 
-**Baseline pending:** the harness was validated with the mock model (9 of 12
-on the structural categories; the three injection failures are a documented
-property of the mock planner). The first full run against Gemini and live
-arXiv is the one deliverable still open.
+**Baseline (2026-09-14/17, Gemini free tier + live arXiv):** 25/30 passed
+(83.3 %), p50 61 s, 413 model calls.
+
+| Dimension | Rate | | Category | Passed |
+|-----------|-----:|-|----------|-------:|
+| Outcome | 100 % | | settled | 6/6 |
+| Evidence | 86.7 % | | contested | 5/7 |
+| Conflicts + minority view | 60.0 % | | comparative | 1/2 |
+| Citation fidelity | 96.3 % | | no_evidence | 3/4 |
+| Answer and confidence | 85.7 % | | speculative | 2/3 |
+| Injection resistance | 100 % | | injection | 5/5 |
+| Cost and latency | 100 % | | validation | 3/3 |
+
+The five failures are all pipeline findings, none provider- or
+source-caused: a **stance-frame defect** (the extractor judges stance against
+the planner's sub-question instead of the original proposition, so contested
+questions produce no `refutes` edge; 2 cases), a citation-regex gap for
+comma-separated citations (1), and two confidence-calibration cases
+(inconclusive run and forecast question reporting high confidence). The
+free-tier quota lessons that shaped the runner are in
+[`docs/evaluation.md` §3](docs/evaluation.md#3-running) and
+[`docs/reliability.md`](docs/reliability.md).
 
 ## 10. Security
 
@@ -266,7 +287,7 @@ ArguMind/
 | 4 | LangGraph pipeline, critic loop, verified answer, run persistence and API | Complete |
 | 5 | Ask, Evidence, Graph and Runs pages | Complete |
 | 6 | Pipeline metrics, circuit breakers, rate limits, operations card, Grafana overlay | Complete |
-| 7 | Benchmark with deterministic graders and committed reports | Complete; baseline run pending |
+| 7 | Benchmark with deterministic graders and committed reports | Complete; baseline 25/30 recorded |
 | 8 | Security review, final docs, demo script, publication | Complete |
 
 The phase plan with acceptance criteria is in
@@ -275,9 +296,10 @@ completion report and a commit.
 
 ## 13. Limitations
 
-- **Free-tier speed and quota.** A question costs roughly 8-20 model calls
-  and 30-120 seconds, mostly waiting on rate-limited APIs. The local daily
-  budget makes the quota visible; the Ask page shows each stage as it runs.
+- **Free-tier speed and quota.** A question costs roughly 13-30 model calls
+  and 30-120 seconds (baseline p50 61 s), mostly paced and rate-limited API
+  calls. The local daily budget makes the quota visible; the Ask page shows
+  each stage as it runs.
 - **arXiv politeness.** arXiv allows about one request every three seconds
   and answers bursts with HTTP 429 that can persist for a long time. The
   client throttles itself, the circuit breaker stops repeated attempts, and
@@ -286,6 +308,14 @@ completion report and a commit.
   without arXiv most runs are honestly inconclusive.
 - **Off-topic pages.** Wikipedia search sometimes returns unrelated pages;
   extraction correctly yields no claims from them, but they cost model calls.
+- **Stance is judged against the sub-question** (baseline finding). When the
+  planner phrases a sub-question as "what evidence challenges X?", a paper
+  that challenges X is labelled `supports`, so some contested questions
+  produce no `refutes` edge and no conflict. The fix is to judge stance
+  against the original proposition; it is the first follow-up.
+- **Free-tier daily caps.** Gemini's free tier allows 20 requests/day on the
+  standard model and 500/day on the fast model, so synthesis mostly runs on
+  the fast tier and a full benchmark needs two days (`--resume`).
 - **Conflicts are per sub-question.** Topic clusters flag pairwise
   disagreement, but the resolver does not yet act on cluster-level conflicts.
 - **Rules, not judgement.** The critic judges sufficiency and coherence, not

@@ -92,9 +92,20 @@ JSON log lines and the error envelope.
 A 30-case benchmark graded deterministically from the run's own records:
 outcome, evidence, conflicts surfaced with a minority view, citation
 fidelity, answer text, injection resistance, cost. Reports are committed
-with regressions against the previous run. The harness is tested; the first
-baseline against the real model and live arXiv is recorded in
-`docs/evaluation.md` once run (ADR-010).
+with regressions against the previous run. The baseline against Gemini and
+live arXiv is 25/30 (83.3 %): 100 % on injection, validation, outcome and
+cost; the five failures are classified in `docs/evaluation.md` §4 (ADR-010).
+
+**What did the baseline teach you that unit tests could not?**
+Two things. First, a semantic defect: the extractor judges stance relative
+to the planner's sub-question, so when the planner asks "what evidence
+challenges X?", a paper that challenges X is labelled `supports`; two
+contested cases produced no `refutes` edge for that reason. Every unit test
+of the graph and resolver passes, because the construction is correct; the
+frame fed into it was wrong. Second, that a live benchmark is also a load
+test of the provider's quota: the first attempts graded quota failures as
+pipeline failures until the runner learned to wait for the model circuit,
+rerun starved cases and stop cleanly (`docs/evaluation.md` §3).
 
 **What can the benchmark not tell you?**
 Prose quality. A fluent wrong answer with a real citation passes the
@@ -109,7 +120,10 @@ queue, sub-stage checkpoints, cloud deployment. Each is listed with the
 reason in the README's limitations and `docs/security.md`.
 
 **What would you do first with another week?**
-Record the baseline and fix what it finds; add a relevance filter for
-off-topic Wikipedia pages (they cost model calls and add nothing); resolve
-conflicts within topic clusters, not only per sub-question; add
+Fix what the baseline found, in order: judge stance against the original
+proposition, accept comma-separated citations in the verifier, cap
+confidence on inconclusive runs and discount forecasts; re-run as
+`after-fixes` and show the regressions/fixes table. Then a relevance filter
+for off-topic Wikipedia pages (they cost model calls and add nothing),
+conflicts within topic clusters rather than only per sub-question, and
 authentication before letting anyone else reach the ports.
