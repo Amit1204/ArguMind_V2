@@ -26,7 +26,7 @@ from app.pipeline.prompts import (
 )
 from app.pipeline.schemas import AnswerOutput, Cluster, ConsensusOutput, PlanOutput
 from app.pipeline.state import RunState
-from app.pipeline.verify import verify_citations
+from app.pipeline.verify import cap_confidence, is_forecast_question, verify_citations
 from app.reasoning.clustering import add_extends_edges, cluster_claims
 from app.reasoning.models import ConflictReport
 from app.sources.models import Source, SourceKind
@@ -53,7 +53,14 @@ def plan_node(state: RunState, ctx: PipelineContext) -> dict:
     question = state["question"]
     with ctx.stage("plan") as stage:
         sub_questions = [question]
-        plan: dict = {"sub_questions": sub_questions, "domains": [], "complexity": "moderate"}
+        # The heuristic is the floor: the planner may add forecast=true, never remove it.
+        forecast = is_forecast_question(question)
+        plan: dict = {
+            "sub_questions": sub_questions,
+            "domains": [],
+            "complexity": "moderate",
+            "forecast": forecast,
+        }
         caveats: list[str] = []
         try:
             response = ctx.provider.complete(
@@ -74,13 +81,23 @@ def plan_node(state: RunState, ctx: PipelineContext) -> dict:
                 if q and q.lower() not in {s.lower() for s in seen}:
                     seen.append(q)
             sub_questions = seen[: ctx.settings.max_sub_questions] or [question]
-            plan = {**parsed.model_dump(), "sub_questions": sub_questions}
+            plan = {
+                **parsed.model_dump(),
+                "sub_questions": sub_questions,
+                "forecast": bool(parsed.forecast or forecast),
+            }
         except LLMError as exc:
             stage.fail(f"planning failed: {exc}")
             caveats.append(
                 "Planning failed; the original question was used as the only sub-question."
             )
-        stage.detail.update({"sub_questions": sub_questions, "complexity": plan.get("complexity")})
+        stage.detail.update(
+            {
+                "sub_questions": sub_questions,
+                "complexity": plan.get("complexity"),
+                "forecast": plan.get("forecast", False),
+            }
+        )
     return {"sub_questions": sub_questions, "plan": plan, "iteration": 0, "caveats": caveats}
 
 
@@ -191,7 +208,10 @@ def extract_node(state: RunState, ctx: PipelineContext) -> dict:
             done.add((source.source_id, index))
             try:
                 claims = extractor.extract(
-                    source, sub_questions[min(index, len(sub_questions) - 1)], index
+                    source,
+                    sub_questions[min(index, len(sub_questions) - 1)],
+                    index,
+                    question=state["question"],
                 )
             except (ExtractionError, LLMError) as exc:
                 failures += 1
@@ -459,6 +479,16 @@ def verify_node(state: RunState, ctx: PipelineContext) -> dict:
         if state.get("status") == "answered" and not result.has_valid_citation:
             caveats.append("The answer contains no verifiable citation; treat it with care.")
             answer["confidence"] = round(float(answer.get("confidence", 0.0)) * 0.5, 3)
+        forecast = bool((state.get("plan") or {}).get("forecast")) or is_forecast_question(
+            state.get("question", "")
+        )
+        capped, cap_caveat = cap_confidence(
+            answer.get("confidence", 0.0), str(state.get("status")), forecast
+        )
+        if cap_caveat:
+            caveats.append(cap_caveat)
+            stage.detail["confidence_before_cap"] = answer.get("confidence")
+        answer["confidence"] = capped
         all_caveats = list(state.get("caveats", [])) + caveats
-        stage.detail.update({**result.model_dump(), "caveats": all_caveats})
+        stage.detail.update({**result.model_dump(), "forecast": forecast, "caveats": all_caveats})
     return {"answer": answer, "verification": result.model_dump(), "caveats": caveats}

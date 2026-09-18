@@ -26,7 +26,7 @@ plan ─▶ gather ─▶ extract ─▶ build_graph ─▶ resolve_conflicts �
 | `consensus` | 1 (standard) | Overall assessment, strength, agreements, disagreements, gaps, confidence. Deterministic tally when no source takes a position or the model fails. | strength, confidence, method |
 | `critic` | 0 | Rule-based gate (ADR-007): enough claims with a stance from enough sources? Consensus formed? Decides `pass`, `retry` or `inconclusive`. | verdict, issues |
 | `answer` | 1 (standard) | Cited Markdown answer; a template for the inconclusive case (no model call); a template assembled from consensus and claims if the model fails. | method |
-| `verify` | 0 | Keeps only citations to sources retrieved in this run, rewrites claim-id citations to their source, removes the rest, flags uncited answers and halves their confidence. | citations found/valid/removed, caveats |
+| `verify` | 0 | Keeps only citations to sources retrieved in this run (single ids or comma-separated lists in one bracket), rewrites claim-id citations to their source, removes the rest, flags uncited answers and halves their confidence. Honesty caps: an `inconclusive` run reports at most 0.5 confidence; a forecast question (planner flag or "will / by 20xx" heuristic) is answered with at most 0.7, each with a caveat. | citations found/valid/removed, forecast, confidence_before_cap, caveats |
 
 Every stage record carries status (`ok`, `failed`, `skipped`, `timeout`),
 timing, the model calls and tokens it consumed, its detail and any error.

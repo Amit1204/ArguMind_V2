@@ -83,6 +83,10 @@ def default_plan(request: LLMRequest) -> dict:
         "sub_questions": [question, f"What evidence contradicts the claim that {core}?"],
         "domains": ["general"],
         "complexity": "moderate",
+        # same heuristic the planner node uses as its floor, so the mock is consistent
+        "forecast": bool(
+            re.search(r"\bwill\b|\bby 20[3-9]\d\b|\bbefore 20[3-9]\d\b", question, re.I)
+        ),
     }
 
 

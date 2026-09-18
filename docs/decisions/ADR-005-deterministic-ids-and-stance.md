@@ -29,9 +29,14 @@ Canonicalisation lowercases scheme and host, drops fragments and tracking
 parameters, and sorts the query string, so trivial URL variants share an id.
 Python's `hash()` is not used anywhere for identity.
 
-Every extracted claim carries a **stance** relative to the sub-question,
-`supports`, `refutes` or `neutral`, chosen by the model as part of the
-structured output and validated as an enum. The database CHECK constraint
+Every extracted claim carries a **stance** relative to the **main question's
+proposition** (`supports`, `refutes` or `neutral`), chosen by the model as
+part of the structured output and validated as an enum. *Amended after the
+first baseline (2026-09-17):* stance was originally judged relative to the
+sub-question that retrieved the source; when the planner phrased a
+sub-question as "what evidence challenges X?", papers challenging X were
+labelled `supports` and no conflict could form. The extractor now receives
+both the main question (stance frame) and the sub-question (search focus). The database CHECK constraint
 enforces the same three values. Phase 3 turns stance into `supports` and
 `refutes` edges, which is what makes conflicts detectable by construction.
 

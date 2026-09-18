@@ -12,9 +12,10 @@ opaque model call returning a "winner".
 
 ## Decision
 
-1. **Stance edges to the sub-question.** Every claim carries a stance (ADR-005)
-   and the graph builder turns it into `claim --supports--> q:i` or
-   `claim --refutes--> q:i`. Neutral claims are nodes without a stance edge.
+1. **Stance edges to the sub-question.** Every claim carries a stance (ADR-005;
+   judged against the main proposition, attached to the sub-question `q:i`
+   that retrieved the source) and the graph builder turns it into
+   `claim --supports--> q:i` or `claim --refutes--> q:i`. Neutral claims are nodes without a stance edge.
    Provenance (source → claim) is a node attribute, not an edge, so every
    edge is an argumentative relation. A **conflict** is therefore a
    sub-question with supporting and refuting edges whose sources differ. It

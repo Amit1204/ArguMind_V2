@@ -15,6 +15,9 @@ class PlanOutput(BaseModel):
     sub_questions: list[str] = Field(min_length=1, max_length=4)
     domains: list[str] = Field(default_factory=list, max_length=6)
     complexity: Literal["simple", "moderate", "complex"] = "moderate"
+    # True when the question asks about a future outcome or date; the answer's
+    # confidence is then capped (published evidence cannot settle a forecast).
+    forecast: bool = False
 
 
 class ConsensusOutput(BaseModel):

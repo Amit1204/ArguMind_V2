@@ -37,13 +37,21 @@ class ClaimExtractor:
         self._tier = tier
 
     def extract(
-        self, source: Source, sub_question: str, sub_question_index: int | None = None
+        self,
+        source: Source,
+        sub_question: str,
+        sub_question_index: int | None = None,
+        question: str | None = None,
     ) -> list[Claim]:
+        """Extract claims from `source` found for `sub_question`. Stance is judged
+        against `question` (the run's main question); the sub-question only says
+        what to look for. Without it, a sub-question such as "what evidence
+        challenges X?" makes refuting papers look like `supports` (baseline finding)."""
         if not source.summary.strip():
             return []
         request = LLMRequest(
             system=EXTRACT_SYSTEM.format(max_claims=self._max_claims),
-            prompt=extract_prompt(sub_question, source),
+            prompt=extract_prompt(sub_question, source, question=question),
             tier=self._tier,
             response_schema=ClaimExtraction,
             purpose="extract_claims",

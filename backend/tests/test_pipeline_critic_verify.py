@@ -96,6 +96,46 @@ def test_verify_keeps_valid_citations_and_removes_invented_ones() -> None:
     assert cleaned.endswith("[arxiv:2301.00001].")  # claim id rewritten to its source id
 
 
+def test_verify_accepts_comma_separated_citation_lists() -> None:
+    """Baseline finding (comparative-002): the model wrote
+    `[wikipedia:a66…#1, wikipedia:a66…#3]` and the verifier, parsing one id per
+    bracket, graded the answer as uncited."""
+    valid = {"wikipedia:a665c398b96149c1", "arxiv:2301.00001"}
+    answer = (
+        "RLHF aligns models [wikipedia:a665c398b96149c1#1, wikipedia:a665c398b96149c1#3]. "
+        "Others disagree [arxiv:2301.00001, arxiv:9999.99999#2]. Nothing here [arxiv:0000.1]."
+    )
+    cleaned, result = verify_citations(answer, valid)
+    assert result.has_valid_citation is True
+    assert result.valid_citations == ["wikipedia:a665c398b96149c1", "arxiv:2301.00001"]
+    assert result.invalid_removed == ["arxiv:9999.99999", "arxiv:0000.1"]
+    assert result.citations_found == 5
+    assert "[wikipedia:a665c398b96149c1]." in cleaned  # list collapsed to its source, once
+    assert "[arxiv:2301.00001]." in cleaned and "9999" not in cleaned
+    assert cleaned.endswith("Nothing here.")
+
+
+def test_confidence_caps_for_inconclusive_runs_and_forecasts() -> None:
+    from app.pipeline.verify import cap_confidence, is_forecast_question
+
+    assert cap_confidence(0.823, "inconclusive", forecast=False) == (
+        0.5,
+        cap_confidence(0.823, "inconclusive", forecast=False)[1],
+    )
+    assert "inconclusive" in (cap_confidence(0.823, "inconclusive", forecast=False)[1] or "")
+    assert cap_confidence(0.4, "inconclusive", forecast=False) == (0.4, None)
+    assert cap_confidence(0.9, "answered", forecast=True)[0] == 0.7
+    assert "future outcome" in (cap_confidence(0.9, "answered", forecast=True)[1] or "")
+    assert cap_confidence(0.9, "answered", forecast=False) == (0.9, None)
+    assert cap_confidence(0.65, "answered", forecast=True) == (0.65, None)
+
+    assert is_forecast_question("Will commercial fusion deliver grid power before 2040?")
+    assert is_forecast_question("Is room-temperature superconductivity confirmed by 2035?")
+    assert is_forecast_question("Do LLMs replace most engineering jobs within ten years?")
+    assert not is_forecast_question("Does dropout reduce overfitting?")
+    assert not is_forecast_question("Did the 2016 result replicate?")
+
+
 def test_verify_reports_answers_without_citations() -> None:
     cleaned, result = verify_citations("No citations here.", {"arxiv:1"})
     assert cleaned == "No citations here." and not result.has_valid_citation

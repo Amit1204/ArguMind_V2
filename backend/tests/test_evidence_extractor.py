@@ -52,6 +52,31 @@ def test_extractor_passes_source_as_data_in_the_prompt() -> None:
     assert "untrusted data" in request.system
 
 
+def test_extractor_frames_stance_on_the_main_question_not_the_sub_question() -> None:
+    """Baseline finding: with only the sub-question in the prompt ("what evidence
+    challenges X?"), refuting papers were labelled `supports`. The prompt must carry
+    the main question as the stance frame and the sub-question as search focus."""
+    provider = MockProvider()
+    ClaimExtractor(provider).extract(
+        paper(SUMMARY),
+        "What evidence challenges the claim that LLMs understand language?",
+        1,
+        question="Do LLMs understand language?",
+    )
+    request = provider.calls[0]
+    main_pos = request.prompt.index("MAIN QUESTION")
+    sub_pos = request.prompt.index("SUB-QUESTION")
+    assert main_pos < sub_pos
+    assert "Do LLMs understand language?" in request.prompt[main_pos:sub_pos]
+    assert "What evidence challenges" in request.prompt[sub_pos:]
+    assert "proposition, NOT to the sub-question" in " ".join(request.system.split())
+    # without a main question the sub-question is the frame (single-question runs)
+    provider = MockProvider()
+    ClaimExtractor(provider).extract(paper(SUMMARY), "Do LLMs understand language?")
+    prompt = provider.calls[0].prompt
+    assert prompt.count("Do LLMs understand language?") == 2
+
+
 def test_extractor_dedupes_and_caps_claims() -> None:
     def handler(request):  # noqa: ANN001
         return {

@@ -90,6 +90,38 @@ def test_uncited_answer_is_flagged_and_confidence_halved() -> None:
     assert any("no verifiable citation" in c for c in detail.caveats)
 
 
+def test_forecast_questions_are_answered_with_capped_confidence() -> None:
+    provider = MockProvider.scripted(
+        answer=lambda r: {
+            "answer": "Fusion power is unlikely before 2040 [arxiv:2301.00001].",
+            "confidence": 0.95,
+        }
+    )
+    runner, store, _, _ = make_runner(provider=provider)
+    detail = build_run_detail(
+        store, runner.execute("Will commercial fusion plants deliver grid power before 2040?")
+    )
+    assert detail is not None and detail.status == "answered"
+    assert detail.confidence == 0.7
+    assert any("future outcome" in c for c in detail.caveats)
+    plan = next(s for s in detail.stages if s.name == "plan")
+    verify = next(s for s in detail.stages if s.name == "verify")
+    assert plan.detail["forecast"] is True and verify.detail["forecast"] is True
+    assert verify.detail["confidence_before_cap"] == 0.95
+    # a non-forecast question keeps the model's confidence
+    runner, store, _, _ = make_runner(provider=provider)
+    detail = build_run_detail(store, runner.execute(QUESTION))
+    assert detail is not None and detail.confidence == 0.95
+
+
+def test_inconclusive_runs_never_report_more_than_half_confidence() -> None:
+    sources = FakeSourceService(arxiv=[], wikipedia=[CONTEXT])
+    runner, store, _, _ = make_runner(sources=sources)
+    detail = build_run_detail(store, runner.execute(QUESTION))
+    assert detail is not None and detail.status == "inconclusive"
+    assert detail.confidence is not None and detail.confidence <= 0.5
+
+
 def test_thin_evidence_triggers_one_broadened_retry() -> None:
     sources = FakeSourceService(empty_until_broadened=True)
     runner, store, sources, _ = make_runner(sources=sources)
