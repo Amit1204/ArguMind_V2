@@ -44,13 +44,18 @@ def make_ask(base_url: str, tag: str, timeout: float) -> Any:
     return ask
 
 
-def make_model_circuit_probe(
-    base_url: str, timeout: float = 10.0, client: httpx.Client | None = None
+def make_circuit_probe(
+    base_url: str,
+    timeout: float = 10.0,
+    client: httpx.Client | None = None,
+    prefixes: tuple[str, ...] = ("llm:", "source:"),
 ) -> Any:
-    """Read the backend's operations summary and report how long the model
-    circuit breaker(s) stay open. On the free tier a burst of cases can trip the
-    provider's per-minute quota; running cases while the circuit is open would
-    grade harness-induced failures as pipeline failures."""
+    """Read the backend's operations summary and report how long any watched
+    circuit breaker stays open. Running a case while the model circuit is open
+    (free-tier quota burst) or a source circuit is open (arXiv 429/406 outage)
+    grades an infrastructure condition as a pipeline failure. The pipeline's
+    behaviour *under* those conditions is covered by unit tests, not by the
+    benchmark, so the runner waits them out."""
     client = client or httpx.Client(base_url=base_url, timeout=timeout)
 
     def probe() -> float:
@@ -60,11 +65,15 @@ def make_model_circuit_probe(
         waits = [
             float(state.get("retry_after_seconds") or 0.0)
             for name, state in circuits.items()
-            if name.startswith("llm:") and state.get("state") == "open"
+            if name.startswith(prefixes) and state.get("state") == "open"
         ]
         return max(waits, default=0.0)
 
     return probe
+
+
+# Backwards-compatible name used by the first version of the pacing.
+make_model_circuit_probe = make_circuit_probe
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-circuit-pacing",
         action="store_true",
-        help="do not wait for the backend's model circuit breaker between cases",
+        help="do not wait for the backend's model/source circuit breakers between cases",
     )
     args = parser.parse_args(argv)
 
@@ -124,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         make_ask(args.base_url, args.tag, args.timeout),
         pause_seconds=args.pause,
         on_result=checkpoint,
-        model_circuit=None if args.no_circuit_pacing else make_model_circuit_probe(args.base_url),
+        model_circuit=None if args.no_circuit_pacing else make_circuit_probe(args.base_url),
     )
     runner.run(cases)
     if runner.aborted_at:

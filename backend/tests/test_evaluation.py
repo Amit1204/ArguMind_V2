@@ -330,24 +330,30 @@ def test_runner_waits_for_open_model_circuit_and_reruns_starved_cases() -> None:
     assert results == [] and recorded == [] and exhausted.aborted_at == "settled-001"
 
 
-def test_model_circuit_probe_reads_open_llm_circuits_only() -> None:
+def test_circuit_probe_reads_open_model_and_source_circuits() -> None:
     import httpx as _httpx
 
-    from app.evaluation.run import make_model_circuit_probe
+    from app.evaluation.run import make_circuit_probe
 
     payload = {
         "circuits": {
             "llm:gemini": {"state": "open", "retry_after_seconds": 69.2},
-            "source:arxiv": {"state": "open", "retry_after_seconds": 500.0},
+            "source:arxiv": {"state": "open", "retry_after_seconds": 110.0},
             "source:wikipedia": {"state": "closed", "retry_after_seconds": 0.0},
         }
     }
     transport = _httpx.MockTransport(lambda request: _httpx.Response(200, json=payload))
     client = _httpx.Client(base_url="http://backend:8000", transport=transport)
-    probe = make_model_circuit_probe("http://backend:8000", client=client)
-    assert probe() == 69.2  # only llm:* circuits count; a throttled source is not a reason to wait
+    probe = make_circuit_probe("http://backend:8000", client=client)
+    assert probe() == 110.0  # the longest open circuit, model or source
+    payload["circuits"]["source:arxiv"] = {"state": "closed", "retry_after_seconds": 0.0}
+    assert probe() == 69.2
     payload["circuits"]["llm:gemini"] = {"state": "half_open", "retry_after_seconds": 0.0}
     assert probe() == 0.0
+    # model-only watching is still available
+    payload["circuits"]["source:arxiv"] = {"state": "open", "retry_after_seconds": 80.0}
+    llm_only = make_circuit_probe("http://backend:8000", client=client, prefixes=("llm:",))
+    assert llm_only() == 0.0
 
 
 def test_smoke_reports_do_not_replace_latest(tmp_path: Path) -> None:

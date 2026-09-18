@@ -51,11 +51,16 @@ Each case is one `POST /api/v1/runs?wait=true` with client id
 (`partial.json`, git-ignored) is written after every case.
 
 **Circuit pacing.** The runner reads `/api/v1/system/operations` before every
-case and, if an `llm:*` circuit breaker is open, waits `retry_after + 2 s`
-(capped at 10 min) instead of starting. After each case it checks again and,
-if the circuit is open or the run ended `inconclusive`/`failed` with **zero**
-successful model calls, waits the circuit out and reruns the case once
-(`extra.retried_circuit`, `extra.circuit_wait_seconds` in the JSON report).
+case and, if any `llm:*` or `source:*` circuit breaker is open, waits
+`retry_after + 2 s` (capped at 10 min) instead of starting. After each case it
+checks again and, if a circuit is open or the run ended
+`inconclusive`/`failed` with **zero** successful model calls, waits the
+circuit out and reruns the case once (`extra.retried_circuit`,
+`extra.circuit_wait_seconds` in the JSON report). Source circuits were added
+after the `after-fixes` run: arXiv answered HTTP 406 for a minute, its
+breaker opened, and the next case was graded on Wikipedia alone. How the
+pipeline behaves *under* an outage is covered by unit tests; the benchmark
+measures it with its sources available.
 This was added after the first live attempt: a canary run plus the first
 case tripped Gemini's per-minute quota, the backend's `llm:gemini` breaker
 opened for 120 s, and the next six cases each ended inconclusive in 4-34 s
