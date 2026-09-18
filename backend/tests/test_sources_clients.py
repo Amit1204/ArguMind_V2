@@ -131,6 +131,19 @@ def test_fetcher_retries_on_503_then_succeeds() -> None:
     assert state["n"] == 3
 
 
+def test_fetcher_retries_intermittent_406_from_arxiv_edge() -> None:
+    """arXiv's CDN answered 406 with an empty body to requests that succeeded
+    seconds later (2026-09-18). A 406 is retried like a 5xx; a 404 still is not."""
+    state = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        state["n"] += 1
+        return httpx.Response(406) if state["n"] == 1 else httpx.Response(200, text="atom")
+
+    assert fetcher_for(handler).get("https://x.test/").text == "atom"
+    assert state["n"] == 2
+
+
 def test_fetcher_gives_up_after_policy_attempts() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, headers={"Retry-After": "1"})

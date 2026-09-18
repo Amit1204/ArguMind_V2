@@ -13,7 +13,7 @@ How the system behaves when its dependencies misbehave. Everything listed is
 | Run | time budget | `RUN_TIMEOUT_SECONDS` (180), `GATHER_BUDGET_FRACTION` (0.5) | gathering stops at half the budget; later stages skip work with caveats |
 | Run | in-run failure memo | — | a source that fails once is not retried in that run |
 | Run | bounded retry | `MAX_ITERATIONS` (1) | one broadened gather, refused when the budget is spent |
-| Sources | retries with jittered backoff | `SOURCE_RETRY_ATTEMPTS` (3) | 429 and 5xx retried, `Retry-After` honoured (capped) |
+| Sources | retries with jittered backoff | `SOURCE_RETRY_ATTEMPTS` (3) | 429, 5xx and 406 retried (arXiv's edge intermittently answers 406 with an empty body to requests that succeed seconds later; observed 2026-09-18), `Retry-After` honoured (capped) |
 | Sources | politeness throttle | `ARXIV_MIN_INTERVAL_SECONDS` (3), `ARXIV_TIMEOUT_SECONDS` (30) | one arXiv request per 3 s, 5 s floor after a 429 |
 | Sources | circuit breaker per kind | `CIRCUIT_FAILURE_THRESHOLD` (3), `CIRCUIT_RECOVERY_SECONDS` (120) | open circuit → instant per-source error, one probe after recovery |
 | Sources | lookup cache | `SOURCE_CACHE_TTL_HOURS` (24) | identical searches never leave the database |

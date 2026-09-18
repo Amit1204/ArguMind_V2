@@ -14,7 +14,11 @@ from app.reliability.retry import RetryPolicy, backoff_delay, parse_retry_after
 log = logging.getLogger(__name__)
 
 USER_AGENT = "ArguMind/0.1 (research assistant; https://github.com/Amit1204)"
-_RETRYABLE = {429, 500, 502, 503, 504}
+# 406 is included on evidence: arXiv's CDN edge intermittently answered
+# "406 Not Acceptable" with an empty body to identical requests that succeeded
+# seconds later (2026-09-18, for about half an hour, two of three requests).
+# It behaves like a transient, so it is retried like one.
+_RETRYABLE = {406, 429, 500, 502, 503, 504}
 
 
 class SourceError(Exception):

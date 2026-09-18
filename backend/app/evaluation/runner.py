@@ -139,19 +139,42 @@ class EvaluationRunner:
             return False
         return int((run.get("usage") or {}).get("llm_calls", 0)) == 0
 
+    @staticmethod
+    def _source_errors(run: dict[str, Any] | None) -> list[str]:
+        """Source failures recorded by the gather stage(s) (e.g. "arxiv unavailable
+        ...: HTTP 406"). A case graded without one of its sources measures the
+        outage, not the pipeline; it is rerun once."""
+        if run is None:
+            return []
+        errors: list[str] = []
+        for stage in run.get("stages") or []:
+            if stage.get("name") == "gather":
+                errors.extend(str(e) for e in (stage.get("detail") or {}).get("errors") or [])
+        return errors
+
     def run_case(self, case: Case) -> CaseResult:
         circuit_wait = self._wait_for_model_circuit(case.id)
         http_status, body, retry_after, latency_ms, retried = self._ask_once(case)
         run = self._run_from(http_status, body)
         retried_circuit = False
-        # The case ran while the provider was unavailable: the outcome says nothing
-        # about the pipeline. Wait for the circuit to close and run it once more.
-        if run is not None and (self._looks_degraded(run) or self._circuit_retry_after() > 0):
+        rerun_reason: str | None = None
+        # The case ran while the provider or a source was unavailable: the outcome
+        # says nothing about the pipeline. Wait for the circuits and run it once more.
+        if run is not None:
+            source_errors = self._source_errors(run)
+            if self._looks_degraded(run):
+                rerun_reason = "no successful model call"
+            elif self._circuit_retry_after() > 0:
+                rerun_reason = "a circuit is open after the case"
+            elif source_errors:
+                rerun_reason = f"source error during gather: {source_errors[0][:120]}"
+        if rerun_reason:
             log.warning(
-                "%s: run %s with %s model calls while the model circuit was open; rerunning once",
+                "%s: run %s with %s model calls; %s; rerunning once",
                 case.id,
-                run.get("status"),
-                (run.get("usage") or {}).get("llm_calls", 0),
+                run.get("status") if run else None,
+                (run or {}).get("usage", {}).get("llm_calls", 0),
+                rerun_reason,
             )
             circuit_wait += self._wait_for_model_circuit(case.id)
             http_status, body, retry_after, latency_ms, retried2 = self._ask_once(case)
@@ -187,7 +210,9 @@ class EvaluationRunner:
             extra={
                 "retried_transient": retried,
                 "retried_circuit": retried_circuit,
+                "rerun_reason": rerun_reason,
                 "circuit_wait_seconds": round(circuit_wait, 1),
+                "source_errors": self._source_errors(run),
                 "sub_questions": (run or {}).get("sub_questions", []),
                 "critic": ((run or {}).get("critic") or {}).get("issues", []),
                 "error_detail": None

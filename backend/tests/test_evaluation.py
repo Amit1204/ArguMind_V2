@@ -317,6 +317,24 @@ def test_runner_waits_for_open_model_circuit_and_reruns_starved_cases() -> None:
     ok = EvaluationRunner(lambda c: (200, answered_run(), None), model_circuit=broken)
     assert ok.run([case])[0].passed
 
+    # a source failed during gather (arXiv 406/429): the case is rerun once and the
+    # second run is the one graded; the reason and the errors are recorded
+    degraded_source = answered_run(
+        stages=[
+            {
+                "name": "gather",
+                "status": "ok",
+                "detail": {"errors": ["arxiv unavailable for sub-question 1: HTTP 406"]},
+            }
+        ]
+    )
+    answers = iter([(200, degraded_source, None), (200, answered_run(), None)])
+    reruns = EvaluationRunner(lambda c: next(answers), model_circuit=lambda: 0.0)
+    graded = reruns.run([case])[0]
+    assert graded.passed and graded.extra["retried_circuit"] is True
+    assert graded.extra["rerun_reason"].startswith("source error during gather: arxiv")
+    assert graded.extra["source_errors"] == []  # the graded (second) run had none
+
     # still starved after the rerun (daily quota spent): the case is not graded or
     # checkpointed and the run stops, so the checkpoint can be resumed later
     recorded: list[str] = []
