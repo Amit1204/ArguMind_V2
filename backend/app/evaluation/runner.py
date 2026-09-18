@@ -101,7 +101,7 @@ class EvaluationRunner:
             if retry_after <= 0:
                 break
             wait = min(retry_after + 2.0, self._circuit_wait_cap - waited)
-            log.warning("%s: model circuit open; waiting %.0fs before the case", case_id, wait)
+            log.warning("%s: a circuit is open; waiting %.0fs before the case", case_id, wait)
             self._sleep(wait)
             waited += wait
         return waited
