@@ -59,10 +59,16 @@ stage recorded a source error (e.g. `arxiv unavailable ...: HTTP 406`), waits
 the circuits out and reruns the case once (`extra.retried_circuit`,
 `extra.rerun_reason`, `extra.source_errors`, `extra.circuit_wait_seconds` in
 the JSON report). Source circuits were added
-after the `after-fixes` run: arXiv answered HTTP 406 for a minute, its
-breaker opened, and the next case was graded on Wikipedia alone. How the
-pipeline behaves *under* an outage is covered by unit tests; the benchmark
-measures it with its sources available.
+during the `after-fixes` attempts: arXiv's origin answered empty HTTP 406
+(later 429) to every **cache-miss** query while cached queries kept
+returning 200, so fresh sub-questions lost their arXiv evidence and the
+cases were graded on Wikipedia alone. The cause was sustained traffic from
+this address over several benchmark days (plus diagnostic probes made
+alongside the runs), rate-limited at arXiv's origin and masked by the CDN
+cache. How the pipeline behaves *under* an outage is covered by unit tests;
+the benchmark measures it with its sources available. **Rule for benchmark
+days:** one arXiv client, no side probes, and if cache-miss queries fail,
+stop and wait hours, not minutes.
 This was added after the first live attempt: a canary run plus the first
 case tripped Gemini's per-minute quota, the backend's `llm:gemini` breaker
 opened for 120 s, and the next six cases each ended inconclusive in 4-34 s
