@@ -119,11 +119,22 @@ Authentication, TLS, shared breaker state across replicas, a persistent job
 queue, sub-stage checkpoints, cloud deployment. Each is listed with the
 reason in the README's limitations and `docs/security.md`.
 
+**What did you do about the failures?**
+Fixed all four (stance judged against the proposition, comma-separated
+citations, confidence caps for inconclusive runs and forecasts), each with
+unit tests, and proved the main one with a live canary: the MOND question
+that had produced 21 supporting and zero refuting claims now yields a
+refuting claim, a detected conflict and a minority report. The full re-run
+was attempted on four days and stopped each time by an upstream outage,
+first arXiv's CDN rejecting the image's TLS 1.3 handshake (a fingerprint
+rule; fixed with a documented TLS 1.2 cap after two wrong theories), then a
+Gemini flash-lite degradation. I kept the baseline as the recorded number
+rather than report cases graded during an outage; §4.1 of the evaluation doc
+lists every attempt and why it stopped.
+
 **What would you do first with another week?**
-Fix what the baseline found, in order: judge stance against the original
-proposition, accept comma-separated citations in the verifier, cap
-confidence on inconclusive runs and discount forecasts; re-run as
-`after-fixes` and show the regressions/fixes table. Then a relevance filter
+Complete the `after-fixes` re-run when both dependencies are healthy and
+show the regressions/fixes table against the baseline. Then a relevance filter
 for off-topic Wikipedia pages (they cost model calls and add nothing),
 conflicts within topic clusters rather than only per sub-question, and
 authentication before letting anyone else reach the ports.

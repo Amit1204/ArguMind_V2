@@ -185,8 +185,43 @@ checkpoint and graded on day 2.
 4. **Discount confidence for forecasts** or relax speculative-001; decide,
    then encode it in the dataset.
 
-Re-run with `--tag after-fixes`; the report will list the regressions and
-fixes against this baseline.
+### 4.1 After the fixes: partial verification, re-run not completed
+
+All four fixes were implemented on 2026-09-18 (commit `6589379`: stance
+judged against the main proposition, comma-separated citation lists, the
+inconclusive and forecast confidence caps), each with unit tests (168 → 169
+backend tests). The full `after-fixes` re-run of the 30 cases was attempted
+on four days and **could not be completed**. What was verified:
+
+| Check | Result |
+|-------|--------|
+| Live canary on the worst baseline failure (`contested-005`, MOND) right after the fix | **pass**: 1 refuting claim, 1 conflict detected and resolved, minority report kept (baseline: 21 supports / 0 refutes, no conflict) |
+| Cleanly re-graded cases (`evaluation/reports/after-fixes-partial.json`) | `comparative-001` pass (1 conflict), `comparative-002` pass (inconclusive, confidence 0.44; was the citation-regex failure), `contested-001` pass (1 conflict) |
+| Unit tests for each fix | pass (prompt framing, citation lists, caps, forecast heuristic, two end-to-end runs) |
+
+Cases graded while a dependency was failing were discarded rather than
+reported. **The recorded benchmark number therefore remains the baseline,
+25/30**; the fixes are verified by tests and by the canary, not by a full
+re-run.
+
+Why the re-run did not complete, in order of discovery:
+
+| Date | What happened | Response |
+|------|---------------|----------|
+| 09-18 | arXiv answered empty HTTP 406 to the backend's queries; the arXiv circuit opened and cases were graded on Wikipedia alone. | Runner waits for open source circuits; 406 retried; a case that lost a source is rerun once. Stopped to save quota. |
+| 09-18/19 | Cached arXiv queries returned 200 while cache misses returned 406/429, which looked like origin rate limiting of this address. | Stopped all traffic for four days. The theory was wrong (see next row); the docs were corrected. |
+| 09-23 | Controlled probes with a fresh random term per request: TLS 1.3 + ALPN from the image's OpenSSL 3.5 → 406 at the CDN's second hop; TLS 1.2 → 200; TLS 1.3 without ALPN → 200; the host's OpenSSL 3.0 → 200. A TLS-fingerprint rule at arXiv's edge. | `ARXIV_TLS_MAX_VERSION=1.2` (verification, User-Agent and politeness unchanged); confirmed with a cache-miss probe through the app's client. |
+| 09-23 | With arXiv fixed, Gemini `gemini-3.5-flash-lite` degraded: trivial calls took 44–67 s with 5xx retries, then `unavailable`, while the standard model answered in 0.8 s. Extraction took 200 s per run, runs overshot the 180 s budget and `wait=true` returned 202. | Stopped; probed every 10 min for an hour without recovery. Switching the fast tier to another model would have broken the like-for-like comparison; the standard model's 20/day cap cannot carry a run. |
+| all days | Free-tier caps: 15 requests/min and 500/day on the fast model, 20/day on the standard model; each aborted attempt spent 50–170 calls. | Provider pacing, daily-quota parking, resumable checkpoint. |
+
+To finish it when both dependencies are healthy (probe each once through
+the app's own clients first):
+
+```bash
+make evaluate EVAL_ARGS="--tag after-fixes --pause 15 --resume"
+```
+
+The report will list regressions and fixes against `latest.*` (the baseline).
 
 ## 5. Limits of the method
 

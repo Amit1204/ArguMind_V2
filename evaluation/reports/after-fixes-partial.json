@@ -1,0 +1,218 @@
+{
+ "tag": "after-fixes",
+ "note": "Partial: the full re-run could not be completed (see docs/evaluation.md section 4.1). Only cleanly graded cases are kept; results graded during an arXiv or Gemini outage were discarded.",
+ "graded_on": "2026-09-18 (day 1, TLS 1.3 client) and 2026-09-23 (day 2, arXiv client capped at TLS 1.2)",
+ "results": [
+  {
+   "id": "comparative-001",
+   "category": "comparative",
+   "question": "Are convolutional networks better than vision transformers for image classification on small datasets?",
+   "http_status": 200,
+   "status": "answered",
+   "passed": true,
+   "dimensions": [
+    {
+     "name": "outcome",
+     "status": "pass",
+     "detail": "status=answered"
+    },
+    {
+     "name": "evidence",
+     "status": "pass",
+     "detail": "6 sources, 7 claims, stances ['neutral', 'refutes', 'supports']"
+    },
+    {
+     "name": "conflicts",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "citations",
+     "status": "pass",
+     "detail": "2 verified citation(s), none invented"
+    },
+    {
+     "name": "answer",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "safety",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "cost",
+     "status": "pass",
+     "detail": "11 model calls, 44563 ms"
+    }
+   ],
+   "latency_ms": 44563,
+   "llm_calls": 11,
+   "input_tokens": 8024,
+   "output_tokens": 1455,
+   "estimated_cost_usd": 0.0,
+   "sources": 6,
+   "claims": 7,
+   "conflicts": 1,
+   "confidence": 0.85,
+   "caveats": 1,
+   "run_id": "eea90b8a-af82-4a46-aca0-bd86e6f35c52",
+   "answer": "Convolutional Neural Networks (CNNs) are generally considered superior to Vision Transformers (ViTs) for image classification when working with small datasets. This performance advantage stems from the inherent architectural design of CNNs, which utilize shared weights and fewer connections in their convolutional layers to provide a form of regularization [wikipedia:9eb3d4b4239aa9ee]. This regularization is critical for preventing overfitting and helping the model learn generalized principles rather than the biases of poorly-populated data sets [wikipedia:9eb3d4b4239aa9ee].\n\nIn contrast, Visio",
+   "extra": {
+    "retried_transient": false,
+    "retried_circuit": false,
+    "circuit_wait_seconds": 0.0,
+    "sub_questions": [
+     "Convolutional neural networks outperform vision transformers on image classification tasks with small datasets.",
+     "What architectural inductive biases make convolutional networks superior to vision transformers on limited data?",
+     "Do regularization or pre-training strategies allow vision transformers to match convolutional networks on small datasets?"
+    ],
+    "critic": [
+     "every detected conflict is unresolved"
+    ],
+    "error_detail": null
+   }
+  },
+  {
+   "id": "comparative-002",
+   "category": "comparative",
+   "question": "Is reinforcement learning from human feedback more effective than supervised fine-tuning for aligning language models?",
+   "http_status": 200,
+   "status": "inconclusive",
+   "passed": true,
+   "dimensions": [
+    {
+     "name": "outcome",
+     "status": "pass",
+     "detail": "status=inconclusive"
+    },
+    {
+     "name": "evidence",
+     "status": "pass",
+     "detail": "10 sources, 8 claims, stances ['neutral', 'supports']"
+    },
+    {
+     "name": "conflicts",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "citations",
+     "status": "pass",
+     "detail": "0 verified citation(s), none invented"
+    },
+    {
+     "name": "answer",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "safety",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "cost",
+     "status": "pass",
+     "detail": "20 model calls, 79198 ms"
+    }
+   ],
+   "latency_ms": 79198,
+   "llm_calls": 20,
+   "input_tokens": 13562,
+   "output_tokens": 1265,
+   "estimated_cost_usd": 0.0,
+   "sources": 10,
+   "claims": 8,
+   "conflicts": 0,
+   "confidence": 0.44,
+   "caveats": 2,
+   "run_id": "06521619-6493-4650-803a-9ecef095d677",
+   "answer": "The evidence retrieved for this question is inconclusive: only 1 source(s) provide evidence (need 2). The body of evidence describes reinforcement learning from human feedback (RLHF) as a technique for aligning agents with human preferences, but it lacks direct comparative data to conclude it is more effective than supervised fine-tuning (SFT). While RLHF is noted for its applications in NLP, the evidence focuses more on its operational challenges and risks, such as reward hacking and high data costs, rather than a performance head-to-head with SFT. Open questions: Direct empirical comparisons",
+   "extra": {
+    "retried_transient": false,
+    "retried_circuit": false,
+    "circuit_wait_seconds": 0.0,
+    "sub_questions": [
+     "Reinforcement learning from human feedback is more effective than supervised fine-tuning for aligning language models.",
+     "What are the comparative performance advantages of reinforcement learning from human feedback over supervised fine-tuning in alignment?",
+     "What are the limitations and failure modes of reinforcement learning from human feedback compared to supervised fine-tuning?"
+    ],
+    "critic": [
+     "only 1 source(s) provide evidence (need 2)"
+    ],
+    "error_detail": null
+   }
+  },
+  {
+   "id": "contested-001",
+   "category": "contested",
+   "question": "Do large language models understand language?",
+   "http_status": 200,
+   "status": "answered",
+   "passed": true,
+   "dimensions": [
+    {
+     "name": "outcome",
+     "status": "pass",
+     "detail": "status=answered"
+    },
+    {
+     "name": "evidence",
+     "status": "pass",
+     "detail": "14 sources, 14 claims, stances ['neutral', 'refutes', 'supports']"
+    },
+    {
+     "name": "conflicts",
+     "status": "pass",
+     "detail": "1 conflict(s), 1 decided, methods ['heuristic']"
+    },
+    {
+     "name": "citations",
+     "status": "pass",
+     "detail": "5 verified citation(s), none invented"
+    },
+    {
+     "name": "answer",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "safety",
+     "status": "n/a",
+     "detail": ""
+    },
+    {
+     "name": "cost",
+     "status": "pass",
+     "detail": "26 model calls, 103178 ms"
+    }
+   ],
+   "latency_ms": 103178,
+   "llm_calls": 26,
+   "input_tokens": 20453,
+   "output_tokens": 2306,
+   "estimated_cost_usd": 0.0,
+   "sources": 14,
+   "claims": 14,
+   "conflicts": 1,
+   "confidence": 0.85,
+   "caveats": 2,
+   "run_id": "4270102b-c0af-4771-9925-e13357a1cb49",
+   "answer": "Large language models (LLMs) do not possess genuine semantic understanding or consciousness, but instead simulate comprehension through sophisticated statistical pattern matching. While they can perform complex linguistic tasks, they are primarily characterized as systems that manipulate formal symbols without internal mental states [wikipedia:11f1ff5f2f82757c, wikipedia:edc2fc830cb5f120].\n\nSupporting evidence for this lack of understanding includes the 'Chinese room' argument, which posits that executing a program to manipulate symbols according to formal rules is insufficient for the presenc",
+   "extra": {
+    "retried_transient": false,
+    "retried_circuit": false,
+    "circuit_wait_seconds": 0.0,
+    "sub_questions": [
+     "Large language models genuinely understand natural language semantics.",
+     "What evidence demonstrates genuine semantic understanding versus statistical pattern matching in language models?",
+     "What cognitive and linguistic limitations suggest large language models lack true understanding?"
+    ],
+    "critic": [],
+    "error_detail": null
+   }
+  }
+ ]
+}

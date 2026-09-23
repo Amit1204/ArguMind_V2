@@ -17,8 +17,12 @@ reproducible, tested, observable, honestly documented.
 > benchmark against Gemini and live arXiv/Wikipedia scores **25/30 (83.3 %)**,
 > with 100 % on injection resistance, validation, outcome and cost bounds;
 > the five failures are classified in [`docs/evaluation.md` §4](docs/evaluation.md#4-baseline)
-> (a stance-frame defect accounts for two of them). Everything below is
-> **implemented** unless marked otherwise.
+> (a stance-frame defect accounts for two of them). The four defects behind
+> them are **fixed and unit-tested**, and a live canary on the worst failing
+> case now passes; the full re-run could not be completed because of
+> upstream outages (arXiv edge TLS rule, then Gemini flash-lite degradation),
+> documented in [§4.1](docs/evaluation.md#41-after-the-fixes-partial-verification-re-run-not-completed).
+> Everything below is **implemented** unless marked otherwise.
 
 ---
 
@@ -245,6 +249,16 @@ comma-separated citations (1), and two confidence-calibration cases
 free-tier quota lessons that shaped the runner are in
 [`docs/evaluation.md` §3](docs/evaluation.md#3-running) and
 [`docs/reliability.md`](docs/reliability.md).
+
+**After the fixes (partial):** all four defects were fixed with unit tests
+(169 backend tests). A live canary on `contested-005` now detects and
+resolves the conflict it missed, and the three cases cleanly re-graded pass
+(`evaluation/reports/after-fixes-partial.json`). The full 30-case re-run was
+attempted on four days and stopped each time by an upstream problem: arXiv's
+CDN rejecting the image's TLS 1.3 handshake (fixed with a documented TLS 1.2
+cap for that client), then a Gemini flash-lite degradation. The recorded
+number stays 25/30; the attempts, causes and the resume command are in
+[`docs/evaluation.md` §4.1](docs/evaluation.md#41-after-the-fixes-partial-verification-re-run-not-completed).
 
 ## 10. Security
 
