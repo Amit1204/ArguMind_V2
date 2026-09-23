@@ -12,7 +12,7 @@ from app.reliability.circuit import REGISTRY as BREAKERS
 from app.reliability.retry import RetryPolicy
 from app.sources.arxiv import ArxivClient
 from app.sources.cache import DbSourceCache, MemorySourceCache, SourceCache
-from app.sources.http import HttpFetcher
+from app.sources.http import HttpFetcher, tls_context
 from app.sources.models import SourceKind
 from app.sources.service import SourceSearchService
 from app.sources.wikipedia import WikipediaClient
@@ -23,12 +23,14 @@ def build_source_service(
 ) -> SourceSearchService:
     policy = RetryPolicy(attempts=settings.source_retry_attempts, base_delay=0.5, max_delay=5.0)
     # arXiv's terms ask for one request every 3 s and answer bursts with 429s
-    # that persist for a while, so it gets its own throttled fetcher.
+    # that persist for a while, so it gets its own throttled fetcher. Its CDN
+    # also rejects this image's TLS 1.3 handshake (see http.tls_context).
     arxiv_fetcher = HttpFetcher(
         timeout_seconds=settings.arxiv_timeout_seconds,
         policy=policy,
         min_interval_seconds=settings.arxiv_min_interval_seconds,
         rate_limit_backoff_seconds=max(5.0, settings.arxiv_min_interval_seconds),
+        verify=tls_context(settings.arxiv_tls_max_version),
     )
     wikipedia_fetcher = HttpFetcher(timeout_seconds=settings.source_timeout_seconds, policy=policy)
     cache: SourceCache = DbSourceCache(session_factory) if session_factory else MemorySourceCache()

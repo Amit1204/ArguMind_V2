@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     arxiv_min_interval_seconds: float = Field(default=3.0, ge=0, le=30)
     # arXiv slow-walks recently throttled clients for a while; give it more time.
     arxiv_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    # Interop: arXiv's CDN answers empty 406s to TLS 1.3 + ALPN handshakes from this
+    # image's OpenSSL 3.5 (verified 2026-09-23; TLS 1.2 passes). "1.3" = no cap.
+    arxiv_tls_max_version: str = Field(default="1.2", pattern="^(1\\.2|1\\.3)$")
     wikipedia_max_results: int = Field(default=3, ge=1, le=10)
 
     # --- Pipeline ----------------------------------------------------------

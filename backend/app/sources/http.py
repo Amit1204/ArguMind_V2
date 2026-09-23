@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import ssl
 import threading
 import time
 from collections.abc import Callable
@@ -37,6 +38,26 @@ class SourceResponseError(SourceError):
     """The upstream answered but the payload could not be parsed."""
 
 
+def tls_context(max_version: str | None) -> ssl.SSLContext | bool:
+    """Default verification (True) or a verifying context capped at TLS 1.2.
+
+    Interoperability setting, not a security choice: arXiv's CDN edge answers
+    an empty 406 to TLS 1.3 handshakes that offer ALPN from this image's
+    OpenSSL 3.5 build (a bot-fingerprint rule that also hits other Python
+    clients; verified 2026-09-23 with cache-miss probes: TLS 1.3 + ALPN -> 406,
+    TLS 1.2 -> 200, TLS 1.3 without ALPN -> 200, older OpenSSL -> 200). httpx
+    always offers ALPN, so the client is capped at TLS 1.2 for that host only.
+    Certificate verification and hostname checks are unchanged.
+    """
+    if not max_version or max_version == "1.3":
+        return True
+    if max_version != "1.2":
+        raise ValueError(f"unsupported TLS max version: {max_version!r}")
+    ctx = ssl.create_default_context()
+    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 class HttpFetcher:
     def __init__(
         self,
@@ -47,16 +68,20 @@ class HttpFetcher:
         min_interval_seconds: float = 0.0,
         rate_limit_backoff_seconds: float = 0.0,
         clock: Callable[[], float] = time.monotonic,
+        verify: ssl.SSLContext | bool = True,
     ) -> None:
         """`min_interval_seconds` spaces requests for APIs with a politeness rule
         (arXiv asks for one request every 3 s); `rate_limit_backoff_seconds` is
-        the floor for the wait after a 429, whatever the backoff policy says."""
+        the floor for the wait after a 429, whatever the backoff policy says;
+        `verify` is httpx's verification setting (True or a custom SSLContext,
+        see `tls_context`)."""
         self._policy = policy or RetryPolicy(attempts=3, base_delay=0.5, max_delay=5.0)
         self._client = httpx.Client(
             timeout=timeout_seconds,
             headers={"User-Agent": USER_AGENT, "Accept": "application/json, application/atom+xml"},
             transport=transport,
             follow_redirects=True,
+            verify=verify,
         )
         self._sleep = sleep
         self._min_interval = min_interval_seconds

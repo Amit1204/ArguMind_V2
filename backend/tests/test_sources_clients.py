@@ -131,6 +131,25 @@ def test_fetcher_retries_on_503_then_succeeds() -> None:
     assert state["n"] == 3
 
 
+def test_tls_context_caps_at_1_2_only_when_asked() -> None:
+    import ssl
+
+    from app.sources.http import tls_context
+
+    assert tls_context("1.3") is True and tls_context(None) is True
+    ctx = tls_context("1.2")
+    assert isinstance(ctx, ssl.SSLContext)
+    assert ctx.maximum_version == ssl.TLSVersion.TLSv1_2
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True  # still verifying
+    with pytest.raises(ValueError):
+        tls_context("1.0")
+    # the fetcher accepts the context without breaking transport injection
+    fetcher = HttpFetcher(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text="ok")), verify=ctx
+    )
+    assert fetcher.get("https://x.test/").text == "ok"
+
+
 def test_fetcher_retries_intermittent_406_from_arxiv_edge() -> None:
     """arXiv's CDN answered 406 with an empty body to requests that succeeded
     seconds later (2026-09-18). A 406 is retried like a 5xx; a 404 still is not."""

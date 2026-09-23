@@ -59,16 +59,19 @@ stage recorded a source error (e.g. `arxiv unavailable ...: HTTP 406`), waits
 the circuits out and reruns the case once (`extra.retried_circuit`,
 `extra.rerun_reason`, `extra.source_errors`, `extra.circuit_wait_seconds` in
 the JSON report). Source circuits were added
-during the `after-fixes` attempts: arXiv's origin answered empty HTTP 406
-(later 429) to every **cache-miss** query while cached queries kept
-returning 200, so fresh sub-questions lost their arXiv evidence and the
-cases were graded on Wikipedia alone. The cause was sustained traffic from
-this address over several benchmark days (plus diagnostic probes made
-alongside the runs), rate-limited at arXiv's origin and masked by the CDN
-cache. How the pipeline behaves *under* an outage is covered by unit tests;
-the benchmark measures it with its sources available. **Rule for benchmark
-days:** one arXiv client, no side probes, and if cache-miss queries fail,
-stop and wait hours, not minutes.
+during the `after-fixes` attempts: arXiv's CDN answered empty HTTP 406 to
+every **cache-miss** query from the backend while cached queries kept
+returning 200, so fresh sub-questions lost their arXiv evidence and cases
+were graded on Wikipedia alone. Two evenings of probing produced a wrong
+theory (origin rate limiting of this address); the decisive test was a
+fresh random term per request: TLS 1.3 + ALPN → 406, TLS 1.2 → 200, TLS 1.3
+without ALPN → 200, the host's older OpenSSL → 200. It is a TLS-fingerprint
+rule at the edge that misfires on this image's Python/OpenSSL 3.5 stack
+(`ARXIV_TLS_MAX_VERSION`, `docs/reliability.md`). How the pipeline behaves
+*under* an outage is covered by unit tests; the benchmark measures it with
+its sources available. **Rule for benchmark days:** one arXiv client, no
+side probes, and a control request must be a guaranteed cache miss or it
+tells you nothing.
 This was added after the first live attempt: a canary run plus the first
 case tripped Gemini's per-minute quota, the backend's `llm:gemini` breaker
 opened for 120 s, and the next six cases each ended inconclusive in 4-34 s
